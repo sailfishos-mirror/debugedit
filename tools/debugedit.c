@@ -3440,6 +3440,16 @@ main (int argc, char *argv[])
 
       switch (dso->shdr[i].sh_type)
 	{
+	case SHT_MIPS_DWARF:
+	  /* According to the specification, all MIPS .debug_* sections are
+	     marked with ELF type SHT_MIPS_DWARF. As SHT_MIPS_DWARF is from
+	     processor-specific range, we have to check that we're actually
+	     dealing with MIPS ELF file before handling such sections.  */
+	  if (dso->ehdr.e_machine != EM_MIPS
+	      && dso->ehdr.e_machine != EM_MIPS_RS3_LE) {
+	    break;
+	  }
+	  /*@fallthrough@*/
 	case SHT_PROGBITS:
 	  name = strptr (dso, dso->ehdr.e_shstrndx, dso->shdr[i].sh_name);
 	  /* TODO: Handle stabs */
