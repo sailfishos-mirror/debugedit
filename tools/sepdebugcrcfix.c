@@ -15,9 +15,9 @@
 
 /* Version 2013-06-24.  */
 
-#define _GNU_SOURCE
-
-#include "system.h"
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 
 #include <string.h>
 #include <fcntl.h>

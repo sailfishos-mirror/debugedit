@@ -1,0 +1,5 @@
+# @configure_input@                                     -*- shell-script -*-
+# Configurable variable values for test suite.
+
+PATH=@abs_builddir@:@abs_top_builddir@:$top_srcdir:$srcdir:$PATH
+

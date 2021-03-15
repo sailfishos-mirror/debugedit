@@ -17,10 +17,9 @@
    along with this program; if not, write to the Free Software Foundation,
    Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
-#include "system.h"
-
-/* Needed for libelf */
-#define _FILE_OFFSET_BITS 64
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 
 #include <assert.h>
 #include <byteswap.h>
@@ -36,10 +35,14 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <popt.h>
+#include <getopt.h>
 
 #include <gelf.h>
 #include <dwarf.h>
+
+#ifndef MAX
+#define MAX(m, n) ((m) < (n) ? (n) : (m))
+#endif
 
 
 /* Unfortunately strtab manipulation functions were only officially added
@@ -71,9 +74,10 @@ typedef struct Ebl_Strtab	Strtab;
 
 #include <search.h>
 
-#include <rpm/rpmio.h>
-#include <rpm/rpmpgp.h>
 #include "tools/hashtab.h"
+
+#include "tools/md5.h"
+#include "tools/sha1.h"
 
 #define DW_TAG_partial_unit 0x3c
 #define DW_FORM_sec_offset 0x17
@@ -3007,24 +3011,61 @@ edit_dwarf2 (DSO *dso)
   return 0;
 }
 
-static struct poptOption optionsTable[] = {
-    { "base-dir",  'b', POPT_ARG_STRING, &base_dir, 0,
-      "base build directory of objects", NULL },
-    { "dest-dir",  'd', POPT_ARG_STRING, &dest_dir, 0,
-      "directory to rewrite base-dir into", NULL },
-    { "list-file",  'l', POPT_ARG_STRING, &list_file, 0,
-      "file where to put list of source and header file names", NULL },
-    { "build-id",  'i', POPT_ARG_NONE, &do_build_id, 0,
-      "recompute build ID note and print ID on stdout", NULL },
-    { "build-id-seed", 's', POPT_ARG_STRING, &build_id_seed, 0,
-      "if recomputing the build ID note use this string as hash seed", NULL },
-    { "no-recompute-build-id",  'n', POPT_ARG_NONE, &no_recompute_build_id, 0,
-      "do not recompute build ID note even when -i or -s are given", NULL },
-    { "version", '\0', POPT_ARG_NONE, &show_version, 0,
-      "print the debugedit version", NULL },
-      POPT_AUTOHELP
-    { NULL, 0, 0, NULL, 0, NULL, NULL }
-};
+static struct option optionsTable[] =
+  {
+    { "base-dir", required_argument, 0, 'b' },
+    { "dest-dir", required_argument, 0, 'd' },
+    { "list-file", required_argument, 0, 'l' },
+    { "build-id", no_argument, 0, 'i' },
+    { "build-id-seed", required_argument, 0, 's' },
+    { "no-recompute-build-id", no_argument, 0, 'n' },
+    { "version", no_argument, 0, 'V' },
+    { "help", no_argument, 0, '?' },
+    { "usage", no_argument, 0, 'u' },
+    { NULL, 0, 0, 0 }
+  };
+
+static const char *optionsChars = "b:d:l:is:nV?";
+
+static const char *helpText =
+  "Usage: %s [OPTION...]\n"
+  "  -b, --base-dir=STRING           base build directory of objects\n"
+  "  -d, --dest-dir=STRING           directory to rewrite base-dir into\n"
+  "  -l, --list-file=STRING          file where to put list of source and \n"
+  "                                  header file names\n"
+  "  -i, --build-id                  recompute build ID note and print ID on\n"
+  "                                  stdout\n"
+  "  -s, --build-id-seed=STRING      if recomputing the build ID note use\n"
+  "                                  this string as hash seed\n"
+  "  -n, --no-recompute-build-id     do not recompute build ID note even\n"
+  "                                  when-i or -s are given\n"
+  "\n"
+  "Help options:\n"
+  "  -?, --help                      Show this help message\n"
+  "  -u, --usage                     Display brief usage message\n"
+  "  -V, --version                   Show debugedit version\n";
+
+static const char *usageText =
+  "Usage: %s [-in?] [-b|--base-dir STRING] [-d|--dest-dir STRING]\n"
+  "        [-l|--list-file STRING] [-i|--build-id] \n"
+  "        [-s|--build-id-seed STRING]\n"
+  "        [-n|--no-recompute-build-id] [-?|--help] [-u|--usage]\n"
+  "        [-V|--version] FILE\n";
+
+static void
+help (const char *progname, bool error)
+{
+  FILE *f = error ? stderr : stdout;
+  fprintf (f, helpText, progname);
+  exit (error ? EXIT_FAILURE : EXIT_SUCCESS);
+}
+
+static void
+usage (const char *progname)
+{
+  printf (usageText, progname);
+  exit (EXIT_SUCCESS);
+}
 
 static DSO *
 fdopen_dso (int fd, const char *name)
@@ -3117,32 +3158,21 @@ error_out:
   return NULL;
 }
 
-static const pgpHashAlgo algorithms[] = { PGPHASHALGO_MD5,
-  PGPHASHALGO_SHA1, PGPHASHALGO_SHA256, PGPHASHALGO_SHA384, PGPHASHALGO_SHA512 };
-
 /* Compute a fresh build ID bit-string from the editted file contents.  */
 static void
 handle_build_id (DSO *dso, Elf_Data *build_id,
 		 size_t build_id_offset, size_t build_id_size)
 {
-  DIGEST_CTX ctx;
-  pgpHashAlgo algorithm;
-  int i = sizeof(algorithms)/sizeof(algorithms[0]);
-  void *digest = NULL;
-  size_t len;
+  /* For now we only handle 16 byte (128 bits) with md5 or 20 bytes
+     (160 bits) with sha1.  */
 
-  while (i-- > 0)
-    {
-      algorithm = algorithms[i];
-      if (rpmDigestLength(algorithm) == build_id_size)
-	break;
-    }
-  if (i < 0)
+  if (build_id_size != 16 && build_id_size != 20)
     {
       fprintf (stderr, "Cannot handle %Zu-byte build ID\n", build_id_size);
       exit (1);
     }
 
+  int i = -1;
   if (no_recompute_build_id
       || (! dirty_elf && build_id_seed == NULL))
     goto print;
@@ -3150,11 +3180,22 @@ handle_build_id (DSO *dso, Elf_Data *build_id,
   /* Clear the old bits so they do not affect the new hash.  */
   memset ((char *) build_id->d_buf + build_id_offset, 0, build_id_size);
 
-  ctx = rpmDigestInit(algorithm, 0);
+  struct md5_ctx md5_ctx;
+  struct sha1_ctx sha1_ctx;
+
+  if (build_id_size == 16)
+    md5_init_ctx (&md5_ctx);
+  else
+    sha1_init_ctx (&sha1_ctx);
 
   /* If a seed string was given use it to prime the hash.  */
   if (build_id_seed != NULL)
-    rpmDigestUpdate(ctx, build_id_seed, strlen (build_id_seed));
+    {
+      if (build_id_size == 16)
+	md5_process_bytes (build_id_seed, strlen (build_id_seed), &md5_ctx);
+      else
+	sha1_process_bytes (build_id_seed, strlen (build_id_seed), &sha1_ctx);
+    }
 
   /* Slurp the relevant header bits and section contents and feed them
      into the hash function.  The only bits we ignore are the offset
@@ -3193,7 +3234,11 @@ handle_build_id (DSO *dso, Elf_Data *build_id,
 	  goto bad;
 	if (elf64_xlatetom (&x, &x, dso->ehdr.e_ident[EI_DATA]) == NULL)
 	  goto bad;
-	rpmDigestUpdate(ctx, x.d_buf, x.d_size);
+
+	if (build_id_size == 16)
+	  md5_process_bytes (x.d_buf, x.d_size, &md5_ctx);
+	else
+	  sha1_process_bytes (x.d_buf, x.d_size, &sha1_ctx);
       }
 
     x.d_type = ELF_T_SHDR;
@@ -3205,19 +3250,36 @@ handle_build_id (DSO *dso, Elf_Data *build_id,
 	  u.shdr.sh_offset = 0;
 	  if (elf64_xlatetom (&x, &x, dso->ehdr.e_ident[EI_DATA]) == NULL)
 	    goto bad;
-	  rpmDigestUpdate(ctx, x.d_buf, x.d_size);
+
+	  if (build_id_size == 16)
+	    md5_process_bytes (x.d_buf, x.d_size, &md5_ctx);
+	  else
+	    sha1_process_bytes (x.d_buf, x.d_size, &sha1_ctx);
 
 	  if (u.shdr.sh_type != SHT_NOBITS)
 	    {
 	      Elf_Data *d = elf_getdata (dso->scn[i], NULL);
 	      if (d == NULL)
 		goto bad;
-	      rpmDigestUpdate(ctx, d->d_buf, d->d_size);
+
+	      if (build_id_size == 16)
+		md5_process_bytes (d->d_buf, d->d_size, &md5_ctx);
+	      else
+		sha1_process_bytes (d->d_buf, d->d_size, &sha1_ctx);
 	    }
 	}
   }
 
-  rpmDigestFinal(ctx, &digest, &len, 0);
+  /* Allocate the memory first to make sure alignment is correct. */
+  void *digest = malloc (build_id_size);
+  if (digest == NULL)
+    goto bad;
+
+  if (build_id_size == 16)
+    md5_finish_ctx (&md5_ctx, digest);
+  else
+    sha1_finish_ctx (&sha1_ctx, digest);
+
   memcpy((unsigned char *)build_id->d_buf + build_id_offset, digest, build_id_size);
   free(digest);
 
@@ -3227,9 +3289,14 @@ handle_build_id (DSO *dso, Elf_Data *build_id,
   /* Now format the build ID bits in hex to print out.  */
   {
     const uint8_t * id = (uint8_t *)build_id->d_buf + build_id_offset;
-    char *hex = pgpHexStr(id, build_id_size);
-    puts (hex);
-    free(hex);
+    size_t blen = build_id_size;
+    static char const hex[] = "0123456789abcdef";
+    while (blen-- > 0)
+      {
+	size_t i = *id++;
+	printf ("%c%c", hex[(i >> 4) & 0xf], hex[(i) & 0xf]);
+      }
+    printf ("\n");
   }
 }
 
@@ -3239,38 +3306,70 @@ main (int argc, char *argv[])
   DSO *dso;
   int fd, i;
   const char *file;
-  poptContext optCon;   /* context for parsing command-line options */
-  int nextopt;
-  const char **args;
   struct stat stat_buf;
   Elf_Data *build_id = NULL;
   size_t build_id_offset = 0, build_id_size = 0;
 
-  optCon = poptGetContext("debugedit", argc, (const char **)argv, optionsTable, 0);
-
-  while ((nextopt = poptGetNextOpt (optCon)) > 0 || nextopt == POPT_ERROR_BADOPT)
-    /* do nothing */ ;
-
-  if (nextopt != -1)
+  while (1)
     {
-      fprintf (stderr, "Error on option %s: %s.\nRun '%s --help' to see a full list of available command line options.\n",
-	      poptBadOption (optCon, 0),
-	      poptStrerror (nextopt),
-	      argv[0]);
-      exit (1);
+      int opt_ndx = -1;
+      int c = getopt_long (argc, argv, optionsChars, optionsTable, &opt_ndx);
+
+      if (c == -1)
+	break;
+
+      switch (c)
+	{
+	default:
+	case '?':
+	  help (argv[0], opt_ndx == -1);
+	  break;
+
+	case 'u':
+	  usage (argv[0]);
+	  break;
+
+	case 'b':
+	  base_dir = optarg;
+	  break;
+
+	case 'd':
+	  dest_dir = optarg;
+	  break;
+
+	case 'l':
+	  list_file = optarg;
+	  break;
+
+	case 'i':
+	  do_build_id = 1;
+	  break;
+
+	case 's':
+	  build_id_seed = optarg;
+	  break;
+
+	case 'n':
+	  no_recompute_build_id = 1;
+	  break;
+
+	case 'V':
+	  show_version = 1;
+	  break;
+	}
     }
 
   if (show_version)
     {
-      printf("RPM debugedit %s\n", VERSION);
+      printf("debugedit %s\n", VERSION);
       exit(EXIT_SUCCESS);
     }
 
-  args = poptGetArgs (optCon);
-  if (args == NULL || args[0] == NULL || args[1] != NULL)
+  if (optind != argc - 1)
     {
-      poptPrintHelp(optCon, stdout, 0);
-      exit (1);
+      fprintf (stderr, "Need one FILE as input\n");
+      usage (argv[0]);
+      exit(EXIT_FAILURE);
     }
 
   if (dest_dir != NULL)
@@ -3307,7 +3406,7 @@ main (int argc, char *argv[])
       list_file_fd = open (list_file, O_WRONLY|O_CREAT|O_APPEND, 0644);
     }
 
-  file = args[0];
+  file = argv[optind];
 
   if (elf_version(EV_CURRENT) == EV_NONE)
     {
@@ -3562,8 +3661,6 @@ main (int argc, char *argv[])
       free (types_sec);
       types_sec = next;
     }
-
-  poptFreeContext (optCon);
 
   return 0;
 }
