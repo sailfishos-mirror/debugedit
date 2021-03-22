@@ -3061,10 +3061,11 @@ help (const char *progname, bool error)
 }
 
 static void
-usage (const char *progname)
+usage (const char *progname, bool error)
 {
-  printf (usageText, progname);
-  exit (EXIT_SUCCESS);
+  FILE *f = error ? stderr : stdout;
+  fprintf (f, usageText, progname);
+  exit (error ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
 static DSO *
@@ -3326,7 +3327,7 @@ main (int argc, char *argv[])
 	  break;
 
 	case 'u':
-	  usage (argv[0]);
+	  usage (argv[0], false);
 	  break;
 
 	case 'b':
@@ -3368,8 +3369,7 @@ main (int argc, char *argv[])
   if (optind != argc - 1)
     {
       fprintf (stderr, "Need one FILE as input\n");
-      usage (argv[0]);
-      exit(EXIT_FAILURE);
+      usage (argv[0], true);
     }
 
   if (dest_dir != NULL)

@@ -61,6 +61,16 @@ AT_CHECK([debugedit --help],[0],[ignore],[ignore])
 AT_CLEANUP
 
 # ===
+# Check debugedit usage.
+# ===
+AT_SETUP([debugedit usage])
+AT_KEYWORDS([debuginfo] [debugedit])
+AT_CHECK([debugedit --usage],[0],[ignore],[])
+AT_CHECK([debugedit],[1],[],[ignore])
+AT_CHECK([debugedit . ..],[1],[],[ignore])
+AT_CLEANUP
+
+# ===
 # Make sure that an executable still runs after debugedit munged it.
 # ===
 AT_SETUP([debugedit executable])
