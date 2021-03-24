@@ -120,6 +120,7 @@ AT_CLEANUP
 # ===
 AT_SETUP([debugedit .debug_str/line_str objects DWARF5])
 AT_KEYWORDS([debuginfo] [debugedit])
+AT_SKIP_IF([test "$GDWARF_5_FLAG" = "no"])
 RPM_DEBUGEDIT_SETUP([-gdwarf-5])
 
 # Capture strings that start with the testdir (pwd) directory path
@@ -184,6 +185,7 @@ AT_CLEANUP
 # ===
 AT_SETUP([debugedit .debug_str/line_str partial DWARF5])
 AT_KEYWORDS([debuginfo] [debugedit])
+AT_SKIP_IF([test "$GDWARF_5_FLAG" = "no"])
 RPM_DEBUGEDIT_SETUP([-gdwarf-5])
 
 # Capture strings that start with the testdir (pwd) directory path
@@ -245,6 +247,7 @@ AT_CLEANUP
 # ===
 AT_SETUP([debugedit .debug_str/line_str exe DWARF5])
 AT_KEYWORDS([debuginfo] [debugedit])
+AT_SKIP_IF([test "$GDWARF_5_FLAG" = "no"])
 RPM_DEBUGEDIT_SETUP([-gdwarf-5])
 
 # Capture strings that start with the testdir (pwd) directory path
@@ -484,6 +487,7 @@ AT_CLEANUP
 # ===
 AT_SETUP([debugedit .debug_line objects DWARF5])
 AT_KEYWORDS([debuginfo] [debugedit])
+AT_SKIP_IF([test "$GDWARF_5_FLAG" = "no"])
 RPM_DEBUGEDIT_SETUP([-gdwarf-5])
 
 AT_DATA([expout],
@@ -530,6 +534,7 @@ AT_CLEANUP
 # ===
 AT_SETUP([debugedit .debug_line partial DWARF5])
 AT_KEYWORDS([debuginfo] [debugedit])
+AT_SKIP_IF([test "$GDWARF_5_FLAG" = "no"])
 RPM_DEBUGEDIT_SETUP([-gdwarf-5])
 
 AT_DATA([expout],
@@ -574,6 +579,7 @@ AT_CLEANUP
 # ===
 AT_SETUP([debugedit .debug_line exe DWARF5])
 AT_KEYWORDS([debuginfo] [debugedit])
+AT_SKIP_IF([test "$GDWARF_5_FLAG" = "no"])
 RPM_DEBUGEDIT_SETUP([-gdwarf-5])
 
 AT_DATA([expout],

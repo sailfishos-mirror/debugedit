@@ -73,6 +73,16 @@ AC_FUNC_MMAP
 AC_FUNC_REALLOC
 AC_CHECK_FUNCS([memchr memset munmap strchr strdup strerror strrchr])
 
+# Checks for compiler flags.
+AC_CACHE_CHECK([whether gcc supports -gdwarf-5], ac_cv_gdwarf_5, [dnl
+save_CFLAGS="$CFLAGS"
+CFLAGS="-gdwarf-5"
+AC_COMPILE_IFELSE([AC_LANG_SOURCE()], ac_cv_gdwarf_5=yes, ac_cv_gdwarf_5=no)
+CFLAGS="$save_CFLAGS"
+])
+GDWARF_5_FLAG=$ac_cv_gdwarf_5
+AC_SUBST([GDWARF_5_FLAG])
+
 # And generate the output files.
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
