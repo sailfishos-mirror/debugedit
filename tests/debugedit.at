@@ -37,11 +37,11 @@ cp "${abs_srcdir}"/data/SOURCES/foobar.h subdir_headers
 cp "${abs_srcdir}"/data/SOURCES/baz.c .
 
 # First three object files (foo.o subdir_bar/bar.o and baz.o)
-gcc -g3 -gz=none -Isubdir_headers $1 -c subdir_foo/foo.c
+gcc -g3 $GZ_NONE_FLAG -Isubdir_headers $1 -c subdir_foo/foo.c
 cd subdir_bar
-gcc -g3 -gz=none -I../subdir_headers $1 -c bar.c
+gcc -g3 $GZ_NONE_FLAG -I../subdir_headers $1 -c bar.c
 cd ..
-gcc -g3 -gz=none -I$(pwd)/subdir_headers $1 -c $(pwd)/baz.c
+gcc -g3 $GZ_NONE_FLAG -I$(pwd)/subdir_headers $1 -c $(pwd)/baz.c
 
 # Then a partially linked object file (somewhat like a kernel module).
 # This will still have relocations between the debug sections.
@@ -49,7 +49,7 @@ ld -r -o foobarbaz.part.o foo.o subdir_bar/bar.o baz.o
 
 # Create an executable. Relocations between debug sections will
 # have been resolved.
-gcc -g3 -gz=none -o foobarbaz.exe foo.o subdir_bar/bar.o baz.o
+gcc -g3 $GZ_NONE_FLAG -o foobarbaz.exe foo.o subdir_bar/bar.o baz.o
 ]])
 
 # ===

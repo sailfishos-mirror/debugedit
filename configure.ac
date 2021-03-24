@@ -83,6 +83,19 @@ CFLAGS="$save_CFLAGS"
 GDWARF_5_FLAG=$ac_cv_gdwarf_5
 AC_SUBST([GDWARF_5_FLAG])
 
+AC_CACHE_CHECK([whether gcc supports -gz=none], ac_cv_gz_none, [dnl
+save_CFLAGS="$CFLAGS"
+CFLAGS="-gz=none"
+AC_COMPILE_IFELSE([AC_LANG_SOURCE()], ac_cv_gz_none=yes, ac_cv_gz_none=no)
+CFLAGS="$save_CFLAGS"
+])
+if test "$ac_cv_gz_none" = "yes"; then
+  GZ_NONE_FLAG="-gz=none"
+else
+  GZ_NONE_FLAG=""
+fi
+AC_SUBST([GZ_NONE_FLAG])
+
 # And generate the output files.
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

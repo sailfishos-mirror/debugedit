@@ -3,3 +3,4 @@
 
 PATH=@abs_builddir@:@abs_top_builddir@:$top_srcdir:$srcdir:$PATH
 GDWARF_5_FLAG=@GDWARF_5_FLAG@
+GZ_NONE_FLAG=@GZ_NONE_FLAG@
