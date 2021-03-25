@@ -2,5 +2,11 @@
 # Configurable variable values for test suite.
 
 PATH=@abs_builddir@:@abs_top_builddir@:$top_srcdir:$srcdir:$PATH
+
+CC="@CC@"
+CFLAGS="@CFLAGS@"
+LD="@LD@"
+LDFLAGS="@LDFLAGS@"
+
 GDWARF_5_FLAG=@GDWARF_5_FLAG@
 GZ_NONE_FLAG=@GZ_NONE_FLAG@

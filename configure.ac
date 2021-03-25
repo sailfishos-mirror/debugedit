@@ -42,6 +42,7 @@ AC_USE_SYSTEM_EXTENSIONS
 AC_PROG_AWK
 AC_PROG_CC_C99
 AC_PROG_LN_S
+AC_CHECK_TOOL([LD], [ld])
 
 # Only really an issue on 32bit platforms. Makes sure we'll get large off_t.
 AC_SYS_LARGEFILE
