@@ -617,6 +617,12 @@ setup_relbuf (DSO *dso, debug_section *sec, int *reltype)
 	    goto fail;
 	  break;
 #endif
+#if defined(EM_MCST_ELBRUS) && defined(R_E2K_32_ABS)
+	case EM_MCST_ELBRUS:
+	  if (rtype != R_E2K_32_ABS)
+		  goto fail;
+	  break;
+#endif
 	default:
 	fail:
 	  error (1, 0, "%s: Unhandled relocation %d in %s section",
