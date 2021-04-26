@@ -3538,7 +3538,7 @@ main (int argc, char *argv[])
 	  GElf_Shdr shdr_mem;
 	  GElf_Shdr *shdr = gelf_getshdr (scn, &shdr_mem);
 	  if (shdr == NULL)
-	    error (1, 0, "Couldn't get shdr: %s\n", elf_errmsg (-1));
+	    error (1, 0, "Couldn't get shdr: %s", elf_errmsg (-1));
 
 	  /* Any sections we have changed aren't allocated sections,
 	     so we don't need to lookup any changed section sizes. */
@@ -3558,7 +3558,7 @@ main (int argc, char *argv[])
 	  GElf_Shdr shdr_mem;
 	  GElf_Shdr *shdr = gelf_getshdr (scn, &shdr_mem);
 	  if (shdr == NULL)
-	    error (1, 0, "Couldn't get shdr: %s\n", elf_errmsg (-1));
+	    error (1, 0, "Couldn't get shdr: %s", elf_errmsg (-1));
 
 	  /* A bug in elfutils before 0.169 means we have to write out
 	     all section data, even when nothing changed.
@@ -3607,7 +3607,7 @@ main (int argc, char *argv[])
 		  shdr->sh_size = sec_size;
 		  shdr->sh_offset = sec_offset;
 		  if (gelf_update_shdr (scn, shdr) == 0)
-		    error (1, 0, "Couldn't update shdr: %s\n",
+		    error (1, 0, "Couldn't update shdr: %s",
 			   elf_errmsg (-1));
 		}
 	    }
@@ -3621,7 +3621,7 @@ main (int argc, char *argv[])
 	{
 	  dso->ehdr.e_shoff = new_offset;
 	  if (gelf_update_ehdr (elf, &dso->ehdr) == 0)
-	    error (1, 0, "Couldn't update ehdr: %s\n", elf_errmsg (-1));
+	    error (1, 0, "Couldn't update ehdr: %s", elf_errmsg (-1));
 	}
     }
 
