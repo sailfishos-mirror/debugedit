@@ -2220,11 +2220,11 @@ edit_attributes (DSO *dso, unsigned char *ptr, struct abbrev_tag *t, int phase)
 			     producers will use DW_FORM_strp which is
 			     more efficient.  */
 			  if (orig_len < new_len)
-			    fprintf (stderr, "Warning, not replacing comp_dir "
-				     "'%s' prefix ('%s' -> '%s') encoded as "
-				     "DW_FORM_string. "
-				     "Replacement too large.\n",
-				     comp_dir, base_dir, dest_dir);
+			    error (0, 0, "Warning, not replacing comp_dir "
+				   "'%s' prefix ('%s' -> '%s') encoded as "
+				   "DW_FORM_string. "
+				   "Replacement too large.",
+				   comp_dir, base_dir, dest_dir);
 			  else
 			    {
 			      /* Add zero (if no file part), one or more
@@ -3175,8 +3175,7 @@ handle_build_id (DSO *dso, Elf_Data *build_id,
 
   if (build_id_size != 16 && build_id_size != 20)
     {
-      fprintf (stderr, "Cannot handle %Zu-byte build ID\n", build_id_size);
-      exit (1);
+      error (1, 0, "Cannot handle %Zu-byte build ID", build_id_size);
     }
 
   int i = -1;
@@ -3228,9 +3227,8 @@ handle_build_id (DSO *dso, Elf_Data *build_id,
     if (elf64_xlatetom (&x, &x, dso->ehdr.e_ident[EI_DATA]) == NULL)
       {
       bad:
-	fprintf (stderr, "Failed to compute header checksum: %s\n",
-		 elf_errmsg (elf_errno ()));
-	exit (1);
+	error (1, 0, "Failed to compute header checksum: %s",
+	       elf_errmsg (elf_errno ()));
       }
 
     x.d_type = ELF_T_PHDR;
@@ -3374,7 +3372,7 @@ main (int argc, char *argv[])
 
   if (optind != argc - 1)
     {
-      fprintf (stderr, "Need one FILE as input\n");
+      error (0, 0, "Need one FILE as input");
       usage (argv[0], true);
     }
 
@@ -3382,22 +3380,18 @@ main (int argc, char *argv[])
     {
       if (base_dir == NULL)
 	{
-	  fprintf (stderr, "You must specify a base dir if you specify a dest dir\n");
-	  exit (1);
+	  error (1, 0, "You must specify a base dir if you specify a dest dir");
 	}
     }
 
   if (build_id_seed != NULL && do_build_id == 0)
     {
-      fprintf (stderr, "--build-id-seed (-s) needs --build-id (-i)\n");
-      exit (1);
+      error (1, 0, "--build-id-seed (-s) needs --build-id (-i)");
     }
 
   if (build_id_seed != NULL && strlen (build_id_seed) < 1)
     {
-      fprintf (stderr,
-	       "--build-id-seed (-s) string should be at least 1 char\n");
-      exit (1);
+      error (1, 0, "--build-id-seed (-s) string should be at least 1 char");
     }
 
   /* Ensure clean paths, users can muck with these. Also removes any
@@ -3416,14 +3410,12 @@ main (int argc, char *argv[])
 
   if (elf_version(EV_CURRENT) == EV_NONE)
     {
-      fprintf (stderr, "library out of date\n");
-      exit (1);
+      error (1, 0, "library out of date");
     }
 
   if (stat(file, &stat_buf) < 0)
     {
-      fprintf (stderr, "Failed to open input file '%s': %s\n", file, strerror(errno));
-      exit (1);
+      error (1, errno, "Failed to open input file '%s'", file);
     }
 
   /* Make sure we can read and write */
@@ -3432,8 +3424,7 @@ main (int argc, char *argv[])
   fd = open (file, O_RDWR);
   if (fd < 0)
     {
-      fprintf (stderr, "Failed to open input file '%s': %s\n", file, strerror(errno));
-      exit (1);
+      error (1, errno, "Failed to open input file '%s'", file);
     }
 
   dso = fdopen_dso (fd, file);
@@ -3461,7 +3452,7 @@ main (int argc, char *argv[])
 	  /* TODO: Handle stabs */
 	  if (strcmp (name, ".stab") == 0)
 	    {
-	      fprintf (stderr, "Stabs debuginfo not supported: %s\n", file);
+	      error (0, 0, "Stabs debuginfo not supported: %s", file);
 	      break;
 	    }
 	  if (!(do_build_id && no_recompute_build_id && !base_dir && !dest_dir)
@@ -3627,9 +3618,7 @@ main (int argc, char *argv[])
 
   if (elf_update (dso->elf, ELF_C_NULL) < 0)
     {
-      fprintf (stderr, "Failed to update file: %s\n",
-	       elf_errmsg (elf_errno ()));
-      exit (1);
+      error (1, 0, "Failed to update file: %s", elf_errmsg (elf_errno ()));
     }
 
   if (do_build_id && build_id != NULL)
@@ -3637,13 +3626,11 @@ main (int argc, char *argv[])
 
   if (elf_update (dso->elf, ELF_C_WRITE) < 0)
     {
-      fprintf (stderr, "Failed to write file: %s\n", elf_errmsg (elf_errno()));
-      exit (1);
+      error (1, 0, "Failed to write file: %s", elf_errmsg (elf_errno()));
     }
   if (elf_end (dso->elf) < 0)
     {
-      fprintf (stderr, "elf_end failed: %s\n", elf_errmsg (elf_errno()));
-      exit (1);
+      error (1, 0, "elf_end failed: %s", elf_errmsg (elf_errno()));
     }
   close (fd);
 
