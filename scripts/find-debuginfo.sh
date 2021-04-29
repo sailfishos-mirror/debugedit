@@ -17,72 +17,84 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>
 
-# Usage: find-debuginfo.sh [--strict-build-id] [-g] [-r] [-m] [-i] [-n]
-#			   [--keep-section SECTION] [--remove-section SECTION]
-#			   [--g-libs]
-#	 		   [-j N] [--jobs N]
-#	 		   [-o debugfiles.list]
-#	 		   [-S debugsourcefiles.list]
-#			   [--run-dwz] [--dwz-low-mem-die-limit N]
-#			   [--dwz-max-die-limit N]
-#			   [--dwz-single-file-mode]
-#			   [--build-id-seed SEED]
-#			   [--unique-debug-suffix SUFFIX]
-#			   [--unique-debug-src-base BASE]
-#			   [[-l filelist]... [-p 'pattern'] -o debuginfo.list]
-#			   [builddir]
-#
-# The -g flag says to use strip -g instead of full strip on DSOs or EXEs.
-# The --g-libs flag says to use strip -g instead of full strip ONLY on DSOs.
-# Options -g and --g-libs are mutually exclusive.
-# The -r flag says to use eu-strip --reloc-debug-sections.
-# Use --keep-section SECTION or --remove-section SECTION to explicitly
-# keep a (non-allocated) section in the main executable or explicitly
-# remove it into the .debug file. SECTION is an extended wildcard pattern.
-# Both options can be given more than once.
-#
-# The --strict-build-id flag says to exit with failure status if
-# any ELF binary processed fails to contain a build-id note.
-# The -m flag says to include a .gnu_debugdata section in the main binary.
-# The -i flag says to include a .gdb_index section in the .debug file.
-# The -n flag says to not recompute the build-id.
-#
-# The -j, --jobs N option will spawn N processes to do the debuginfo
-# extraction in parallel.
-#
-# A single -o switch before any -l or -p switches simply renames
-# the primary output file from debugfiles.list to something else.
-# A -o switch that follows a -p switch or some -l switches produces
-# an additional output file with the debuginfo for the files in
-# the -l filelist file, or whose names match the -p pattern.
-# The -p argument is an grep -E -style regexp matching the a file name,
-# and must not use anchors (^ or $).
-#
-# The --run-dwz flag instructs find-debuginfo.sh to run the dwz utility
-# if available, and --dwz-low-mem-die-limit and --dwz-max-die-limit
-# provide detailed limits.  See dwz(1) -l and -L option for details.
-# Use --dwz-single-file-mode to disable multi-file mode, see dwz(1) -m
-# for more details.
+help()
+{
+  cat <<'EOF'
+Usage: find-debuginfo.sh [OPTION]... [builddir]
+automagically generates debug info and file lists
 
-#
-# If --build-id-seed SEED is given then debugedit is called to
-# update the build-ids it finds adding the SEED as seed to recalculate
-# the build-id hash.  This makes sure the build-ids in the ELF files
-# are unique between versions and releases of the same package.
-# (Use --build-id-seed "%{VERSION}-%{RELEASE}".)
-#
-# If --unique-debug-suffix SUFFIX is given then the debug files created
-# for <FILE> will be named <FILE>-<SUFFIX>.debug.  This makes sure .debug
-# are unique between package version, release and architecture.
-# (Use --unique-debug-suffix "-%{VERSION}-%{RELEASE}.%{_arch}".)
-#
-# If --unique-debug-src-base BASE is given then the source directory
-# will be called /usr/debug/src/<BASE>.  This makes sure the debug source
-# directories are unique between package version, release and architecture.
-# (Use --unique-debug-src-base "%{name}-%{VERSION}-%{RELEASE}.%{_arch}".)
-#
-# All file names in switches are relative to builddir (. if not given).
-#
+Options:
+[--strict-build-id] [-g] [-r] [-m] [-i] [-n]
+[--keep-section SECTION] [--remove-section SECTION]
+[--g-libs]
+[-j N] [--jobs N]
+[-o debugfiles.list]
+[-S debugsourcefiles.list]
+[--run-dwz] [--dwz-low-mem-die-limit N]
+[--dwz-max-die-limit N]
+[--dwz-single-file-mode]
+[--build-id-seed SEED]
+[--unique-debug-suffix SUFFIX]
+[--unique-debug-src-base BASE]
+[[-l filelist]... [-p 'pattern'] -o debuginfo.list]
+[builddir]
+
+The -g flag says to use strip -g instead of full strip on DSOs or EXEs.
+The --g-libs flag says to use strip -g instead of full strip ONLY on
+DSOs.  Options -g and --g-libs are mutually exclusive.
+
+The -r flag says to use eu-strip --reloc-debug-sections.
+
+Use --keep-section SECTION or --remove-section SECTION to explicitly
+keep a (non-allocated) section in the main executable or explicitly
+remove it into the .debug file. SECTION is an extended wildcard
+pattern.  Both options can be given more than once.
+
+The --strict-build-id flag says to exit with failure status if
+any ELF binary processed fails to contain a build-id note.
+
+The -m flag says to include a .gnu_debugdata section in the main binary.
+
+The -i flag says to include a .gdb_index section in the .debug file.
+
+The -n flag says to not recompute the build-id.
+
+The -j, --jobs N option will spawn N processes to do the debuginfo
+extraction in parallel.
+
+A single -o switch before any -l or -p switches simply renames
+the primary output file from debugfiles.list to something else.
+A -o switch that follows a -p switch or some -l switches produces
+an additional output file with the debuginfo for the files in
+the -l filelist file, or whose names match the -p pattern.
+The -p argument is an grep -E -style regexp matching the a file name,
+and must not use anchors (^ or $).
+
+The --run-dwz flag instructs find-debuginfo.sh to run the dwz utility
+if available, and --dwz-low-mem-die-limit and --dwz-max-die-limit
+provide detailed limits.  See dwz(1) -l and -L option for details.
+Use --dwz-single-file-mode to disable multi-file mode, see dwz(1) -m
+for more details.
+
+If --build-id-seed SEED is given then debugedit is called to
+update the build-ids it finds adding the SEED as seed to recalculate
+the build-id hash.  This makes sure the build-ids in the ELF files
+are unique between versions and releases of the same package.
+(Use --build-id-seed "%{VERSION}-%{RELEASE}".)
+
+If --unique-debug-suffix SUFFIX is given then the debug files created
+for <FILE> will be named <FILE>-<SUFFIX>.debug.  This makes sure .debug
+are unique between package version, release and architecture.
+(Use --unique-debug-suffix "-%{VERSION}-%{RELEASE}.%{_arch}".)
+
+If --unique-debug-src-base BASE is given then the source directory
+will be called /usr/debug/src/<BASE>.  This makes sure the debug source
+dirs are unique between package version, release and achitecture (Use
+--unique-debug-src-base "%{name}-%{VERSION}-%{RELEASE}.%{_arch}")
+
+All file names in switches are relative to builddir ('.' if not given).
+EOF
+}
 
 # Figure out where we are installed so we can call other helper scripts.
 lib_rpm_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -128,6 +140,9 @@ unique_debug_src_base=
 
 # Number of parallel jobs to spawn
 n_jobs=1
+
+# exit early on --version or --help
+done=false
 
 BUILDDIR=.
 out=debugfiles.list
@@ -223,6 +238,14 @@ while [ $# -gt 0 ]; do
     srcout=$2
     shift
     ;;
+  --version)
+    echo "debugedit find-debuginfo.sh"
+    done=true;
+    ;;
+  --help)
+    help
+    done=true
+    ;;
   *)
     BUILDDIR=$1
     shift
@@ -231,6 +254,9 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+# version or help given
+if [ "$done" = "true" ]; then exit 0; fi
 
 if test -n "$build_id_seed" -a "$no_recompute_build_id" = "true"; then
   echo >&2 "*** ERROR: --build-id-seed (unique build-ids) and -n (do not recompute build-id) cannot be used together"

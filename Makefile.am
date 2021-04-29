@@ -39,7 +39,7 @@ sepdebugcrcfix_CFLAGS = @LIBELF_CFLAGS@ $(AM_CFLAGS)
 sepdebugcrcfix_LDADD = @LIBELF_LIBS@
 
 # Manual pages are generated for dist
-dist_man_MANS = debugedit.1 sepdebugcrcfix.1
+dist_man_MANS = debugedit.1 sepdebugcrcfix.1 find-debuginfo.sh.1
 
 debugedit.1: tools/debugedit.c $(top_srcdir)/configure.ac
 	$(MAKE) $(AM_MAKEFLAGS) debugedit$(EXEEXT)
@@ -52,6 +52,11 @@ sepdebugcrcfix.1: tools/sepdebugcrcfix.c $(top_srcdir)/configure.ac
 	$(HELP2MAN) -N --output=$@ \
 	  --name='fixes CRC for separate .debug files' \
 	  ./sepdebugcrcfix$(EXEEXT)
+
+find-debuginfo.sh.1: scripts/find-debuginfo.sh $(top_srcdir)/configure.ac
+	$(HELP2MAN) -N --output=$@ \
+	  --name='finds debuginfo and processes it' \
+	  $(top_srcdir)/scripts/find-debuginfo.sh
 
 noinst_HEADERS= tools/ansidecl.h \
 		tools/hashtab.h \

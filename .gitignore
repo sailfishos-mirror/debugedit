@@ -31,6 +31,8 @@ debugedit.1
 sepdebugcrcfix
 sepdebugcrcfix.1
 
+find-debuginfo.sh.1
+
 atconfig
 atlocal
 package.m4
