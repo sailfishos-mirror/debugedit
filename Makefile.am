@@ -39,13 +39,19 @@ sepdebugcrcfix_CFLAGS = @LIBELF_CFLAGS@ $(AM_CFLAGS)
 sepdebugcrcfix_LDADD = @LIBELF_LIBS@
 
 # Manual pages are generated for dist
-dist_man_MANS = debugedit.1
+dist_man_MANS = debugedit.1 sepdebugcrcfix.1
 
 debugedit.1: tools/debugedit.c $(top_srcdir)/configure.ac
 	$(MAKE) $(AM_MAKEFLAGS) debugedit$(EXEEXT)
 	$(HELP2MAN) -N --output=$@ \
 	  --name='debug source path manipulation tool' \
 	  ./debugedit$(EXEEXT)
+
+sepdebugcrcfix.1: tools/sepdebugcrcfix.c $(top_srcdir)/configure.ac
+	$(MAKE) $(AM_MAKEFLAGS) sepdebugcrcfix$(EXEEXT)
+	$(HELP2MAN) -N --output=$@ \
+	  --name='fixes CRC for separate .debug files' \
+	  ./sepdebugcrcfix$(EXEEXT)
 
 noinst_HEADERS= tools/ansidecl.h \
 		tools/hashtab.h \

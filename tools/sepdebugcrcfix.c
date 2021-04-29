@@ -300,11 +300,40 @@ process (Elf *elf, int fd, const char *fname)
   return false;
 }
 
+static void
+version (void)
+{
+  printf("sepdebugcrcfix %s\n", VERSION);
+  exit(EXIT_SUCCESS);
+}
+
+static const char *helpText =
+  "Usage: %s DEBUG_DIR FILEs\n" \
+  "Fixes CRC in .debug files under DEBUG_DIR for the given FILEs\n"	\
+  "\n"									\
+  "DEBUG_DIR is usually \"usr/lib/debug\".\n"				\
+  "FILEs should have relative paths.\n"					\
+  "The relative paths will be used to find the corresponding .debug\n"  \
+  "files under DEBUGDIR\n";
+
+static void
+help (const char *progname, bool error)
+{
+  FILE *f = error ? stderr : stdout;
+  fprintf (f, helpText, progname);
+  exit (error ? EXIT_FAILURE : EXIT_SUCCESS);
+}
+
 int
 main (int argc, char **argv)
 {
+  if (argc == 2 && strcmp (argv[1], "--version") == 0)
+    version ();
+  if (argc == 2 && strcmp (argv[1], "--help") == 0)
+    help (argv[0], false);
   if (argc < 2)
-    error (1, 0, _("usr/lib/debug [<relative filenames>...]"));
+    help (argv[0], true);
+
   usr_lib_debug = argv[1];
   if (elf_version (EV_CURRENT) == EV_NONE)
     error (1, 0, _("error initializing libelf: %s"), elf_errmsg (-1));
