@@ -3034,7 +3034,7 @@ static struct option optionsTable[] =
 static const char *optionsChars = "b:d:l:is:nV?";
 
 static const char *helpText =
-  "Usage: %s [OPTION...]\n"
+  "Usage: %s [OPTION...] FILE\n"
   "  -b, --base-dir=STRING           base build directory of objects\n"
   "  -d, --dest-dir=STRING           directory to rewrite base-dir into\n"
   "  -l, --list-file=STRING          file where to put list of source and \n"
