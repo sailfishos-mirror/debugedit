@@ -67,4 +67,4 @@ noinst_HEADERS= tools/ansidecl.h \
 		tools/md5.h \
 		tools/sha1.h
 
-EXTRA_DIST = README COPYING COPYING3 COPYING.LIB
+EXTRA_DIST = README COPYING COPYING3 COPYING.LIB scripts/find-debuginfo.sh
