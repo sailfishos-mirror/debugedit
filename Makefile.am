@@ -25,7 +25,7 @@ AM_CFLAGS = -Wall
 bin_PROGRAMS = debugedit sepdebugcrcfix
 
 # Install find-debuginfo.sh in $(bindir) and distribute it.
-dist_bin_SCRIPTS = scripts/find-debuginfo.sh
+bin_SCRIPTS = $(top_srcdir)/scripts/find-debuginfo.sh
 
 debugedit_SOURCES = tools/debugedit.c \
 		    tools/hashtab.c \
@@ -41,19 +41,23 @@ sepdebugcrcfix_LDADD = @LIBELF_LIBS@
 # Manual pages are generated for dist
 dist_man_MANS = debugedit.1 sepdebugcrcfix.1 find-debuginfo.sh.1
 
-debugedit.1: tools/debugedit.c $(top_srcdir)/configure.ac
+# Common dependency for man pages. Man pages are only regenerated when
+# their main source is newer, or configure.ac (version) is updated.
+TOP_CONFIGURE_AC = $(top_srcdir)/configure.ac
+
+debugedit.1: tools/debugedit.c $(TOP_CONFIGURE_AC)
 	$(MAKE) $(AM_MAKEFLAGS) debugedit$(EXEEXT)
 	$(HELP2MAN) -N --output=$@ \
 	  --name='debug source path manipulation tool' \
 	  ./debugedit$(EXEEXT)
 
-sepdebugcrcfix.1: tools/sepdebugcrcfix.c $(top_srcdir)/configure.ac
+sepdebugcrcfix.1: tools/sepdebugcrcfix.c $(TOP_CONFIGURE_AC)
 	$(MAKE) $(AM_MAKEFLAGS) sepdebugcrcfix$(EXEEXT)
 	$(HELP2MAN) -N --output=$@ \
 	  --name='fixes CRC for separate .debug files' \
 	  ./sepdebugcrcfix$(EXEEXT)
 
-find-debuginfo.sh.1: scripts/find-debuginfo.sh $(top_srcdir)/configure.ac
+find-debuginfo.sh.1: $(top_srcdir)/scripts/find-debuginfo.sh $(TOP_CONFIGURE_AC)
 	$(HELP2MAN) -N --output=$@ \
 	  --name='finds debuginfo and processes it' \
 	  $(top_srcdir)/scripts/find-debuginfo.sh

@@ -23,7 +23,7 @@ AC_CONFIG_HEADERS([config.h])
 
 # We are using foreign, not gnu, because we don't provide some
 # "standard" files like ChangeLog, AUTHORS, INSTALL, etc.
-AM_INIT_AUTOMAKE([foreign silent-rules subdir-objects
+AM_INIT_AUTOMAKE([foreign silent-rules subdir-objects std-options
                   no-dist-gzip dist-xz tar-pax
                   -Wall -Wno-portability])
 
