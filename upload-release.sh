@@ -39,9 +39,9 @@ make -j$(nproc) && make distcheck
 
 # Sign
 mkdir $VERSION
-cp debugedit-$VERSION.tar.bz2 $VERSION/
+cp debugedit-$VERSION.tar.xz $VERSION/
 cd $VERSION/
-gpg -b debugedit-$VERSION.tar.bz2
+gpg -b debugedit-$VERSION.tar.xz
 cd ..
 
 # Backup copy
@@ -51,11 +51,11 @@ cp -r $VERSION $HOME/debugedit-$VERSION
 scp -r $VERSION sourceware.org:/sourceware/ftp/pub/debugedit/
 ssh sourceware.org "(cd /sourceware/ftp/pub/debugedit \
   && chmod go+rx $VERSION \
-  && chmod go+r  $VERSION/debugedit-$VERSION.tar.bz2* \
-  && ln -sf $VERSION/debugedit-$VERSION.tar.bz2 \
-	debugedit-latest.tar.bz2 \
-  && ln -sf $VERSION/debugedit-$VERSION.tar.bz2.sig \
-	debugedit-latest.tar.bz2.sig \
+  && chmod go+r  $VERSION/debugedit-$VERSION.tar.xz* \
+  && ln -sf $VERSION/debugedit-$VERSION.tar.xz \
+	debugedit-latest.tar.xz \
+  && ln -sf $VERSION/debugedit-$VERSION.tar.xz.sig \
+	debugedit-latest.tar.xz.sig \
   && ls -lah debugedit-latest*)"
 
 # Cleanup
