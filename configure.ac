@@ -17,7 +17,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 AC_PREREQ([2.69])
-AC_INIT([debugedit], [0.1], [debugedit@sourceware.org])
+AC_INIT([debugedit], [0.2], [debugedit@sourceware.org])
 AC_CONFIG_SRCDIR([tools/debugedit.c])
 AC_CONFIG_HEADERS([config.h])
 
