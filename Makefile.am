@@ -41,23 +41,30 @@ sepdebugcrcfix_LDADD = @LIBELF_LIBS@
 # Manual pages are generated for dist
 dist_man_MANS = debugedit.1 sepdebugcrcfix.1 find-debuginfo.sh.1
 
-# Common dependency for man pages. Man pages are only regenerated when
-# their main source is newer, or configure.ac (version) is updated.
-TOP_CONFIGURE_AC = $(top_srcdir)/configure.ac
+# The 'case' ensures the man pages are only generated if the corresponding
+# source script (the first prerequisite) or configure.ac (for the version)
+# has been changed.  The executable prerequisite is solely meant to force
+# these docs to be made only after the executable has been compiled.
+# This makes sure help2man is not normally necessary (since the generated
+# man pages are distributed).
+debugedit.1: tools/debugedit.c configure.ac debugedit$(EXEEXT)
+	@case '$?' in \
+	  *$<* | *configure.ac* ) $(HELP2MAN) -N --output=$@ \
+		--name='debug source path manipulation tool' \
+		./debugedit$(EXEEXT) ;; \
+	  * ) : ;; \
+	esac
 
-debugedit.1: tools/debugedit.c $(TOP_CONFIGURE_AC)
-	$(MAKE) $(AM_MAKEFLAGS) debugedit$(EXEEXT)
-	$(HELP2MAN) -N --output=$@ \
-	  --name='debug source path manipulation tool' \
-	  ./debugedit$(EXEEXT)
+sepdebugcrcfix.1: tools/sepdebugcrcfix.c configure.ac sepdebugcrcfix$(EXEEXT)
+	@case '$?' in \
+	  *$<* | *configure.ac* ) $(HELP2MAN) -N --output=$@ \
+		--name='fixes CRC for separate .debug files' \
+		./sepdebugcrcfix$(EXEEXT) ;;\
+	  * ) : ;; \
+	esac
 
-sepdebugcrcfix.1: tools/sepdebugcrcfix.c $(TOP_CONFIGURE_AC)
-	$(MAKE) $(AM_MAKEFLAGS) sepdebugcrcfix$(EXEEXT)
-	$(HELP2MAN) -N --output=$@ \
-	  --name='fixes CRC for separate .debug files' \
-	  ./sepdebugcrcfix$(EXEEXT)
-
-find-debuginfo.sh.1: $(top_srcdir)/scripts/find-debuginfo.sh $(TOP_CONFIGURE_AC)
+# Since the script isn't generated this doesn't need any special casing.
+find-debuginfo.sh.1: $(top_srcdir)/scripts/find-debuginfo.sh
 	$(HELP2MAN) -N --output=$@ \
 	  --name='finds debuginfo and processes it' \
 	  $(top_srcdir)/scripts/find-debuginfo.sh
