@@ -100,4 +100,5 @@ AC_SUBST([GZ_NONE_FLAG])
 
 # And generate the output files.
 AC_CONFIG_FILES([Makefile])
+AC_CONFIG_FILES([scripts/find-debuginfo], [chmod +x scripts/find-debuginfo])
 AC_OUTPUT

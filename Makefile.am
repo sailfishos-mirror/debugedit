@@ -24,8 +24,8 @@ AM_CFLAGS = -Wall
 # All our programs
 bin_PROGRAMS = debugedit sepdebugcrcfix
 
-# Install find-debuginfo.sh in $(bindir) and distribute it.
-bin_SCRIPTS = $(top_srcdir)/scripts/find-debuginfo.sh
+# Install find-debuginfo in $(bindir) and distribute it.
+bin_SCRIPTS = $(top_srcdir)/scripts/find-debuginfo
 
 debugedit_SOURCES = tools/debugedit.c \
 		    tools/hashtab.c \
@@ -39,7 +39,7 @@ sepdebugcrcfix_CFLAGS = @LIBELF_CFLAGS@ $(AM_CFLAGS)
 sepdebugcrcfix_LDADD = @LIBELF_LIBS@
 
 # Manual pages are generated for dist
-dist_man_MANS = debugedit.1 sepdebugcrcfix.1 find-debuginfo.sh.1
+dist_man_MANS = debugedit.1 sepdebugcrcfix.1 find-debuginfo.1
 
 # The 'case' ensures the man pages are only generated if the corresponding
 # source script (the first prerequisite) or configure.ac (for the version)
@@ -64,14 +64,14 @@ sepdebugcrcfix.1: tools/sepdebugcrcfix.c configure.ac sepdebugcrcfix$(EXEEXT)
 	esac
 
 # Since the script isn't generated this doesn't need any special casing.
-find-debuginfo.sh.1: $(top_srcdir)/scripts/find-debuginfo.sh
+find-debuginfo.1: $(top_srcdir)/scripts/find-debuginfo
 	$(HELP2MAN) -N --output=$@ \
 	  --name='finds debuginfo and processes it' \
-	  $(top_srcdir)/scripts/find-debuginfo.sh
+	  $(top_srcdir)/scripts/find-debuginfo
 
 noinst_HEADERS= tools/ansidecl.h \
 		tools/hashtab.h \
 		tools/md5.h \
 		tools/sha1.h
 
-EXTRA_DIST = README COPYING COPYING3 COPYING.LIB scripts/find-debuginfo.sh
+EXTRA_DIST = README COPYING COPYING3 COPYING.LIB scripts/find-debuginfo

@@ -1,5 +1,5 @@
 #!/bin/bash
-#find-debuginfo.sh - automagically generate debug info and file list
+#find-debuginfo - automagically generate debug info and file list
 #for inclusion in an rpm spec file.
 
 # Copyright (C) 2002-2021 rpm and debugedit contributors
@@ -20,7 +20,7 @@
 help()
 {
   cat <<'EOF'
-Usage: find-debuginfo.sh [OPTION]... [builddir]
+Usage: find-debuginfo [OPTION]... [builddir]
 automagically generates debug info and file lists
 
 Options:
@@ -70,7 +70,7 @@ the -l filelist file, or whose names match the -p pattern.
 The -p argument is an grep -E -style regexp matching the a file name,
 and must not use anchors (^ or $).
 
-The --run-dwz flag instructs find-debuginfo.sh to run the dwz utility
+The --run-dwz flag instructs find-debuginfo to run the dwz utility
 if available, and --dwz-low-mem-die-limit and --dwz-max-die-limit
 provide detailed limits.  See dwz(1) -l and -L option for details.
 Use --dwz-single-file-mode to disable multi-file mode, see dwz(1) -m
@@ -239,7 +239,7 @@ while [ $# -gt 0 ]; do
     shift
     ;;
   --version)
-    echo "debugedit find-debuginfo.sh"
+    echo "find-debuginfo @VERSION@"
     done=true;
     ;;
   --help)
