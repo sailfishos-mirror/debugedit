@@ -24,8 +24,19 @@ AM_CFLAGS = -Wall
 # All our programs
 bin_PROGRAMS = debugedit sepdebugcrcfix
 
-# Install find-debuginfo in $(bindir) and distribute it.
-bin_SCRIPTS = $(top_srcdir)/scripts/find-debuginfo
+# Install find-debuginfo in $(bindir)
+bin_SCRIPTS = find-debuginfo
+
+# All our scripts are generated, so need to be explicitly cleaned
+CLEANFILES = $(bin_SCRIPTS)
+
+# Some standard substitutions for scripts
+do_subst = ($(SED) -e 's,[@]PACKAGE[@],$(PACKAGE),g' \
+		   -e 's,[@]VERSION[@],$(VERSION),g')
+
+find-debuginfo: $(top_srcdir)/scripts/find-debuginfo.in Makefile
+	$(do_subst) < "$(top_srcdir)/scripts/$@.in" > "$@"
+	chmod +x "$@"
 
 debugedit_SOURCES = tools/debugedit.c \
 		    tools/hashtab.c \
@@ -63,15 +74,17 @@ sepdebugcrcfix.1: tools/sepdebugcrcfix.c configure.ac sepdebugcrcfix$(EXEEXT)
 	  * ) : ;; \
 	esac
 
-# Since the script isn't generated this doesn't need any special casing.
-find-debuginfo.1: $(top_srcdir)/scripts/find-debuginfo
-	$(HELP2MAN) -N --output=$@ \
-	  --name='finds debuginfo and processes it' \
-	  $(top_srcdir)/scripts/find-debuginfo
+find-debuginfo.1: $(top_srcdir)/scripts/find-debuginfo.in configure.ac find-debuginfo
+	@case '$?' in \
+	  *$<* | *configure.ac* ) $(HELP2MAN) -N --output=$@ \
+		--name='finds debuginfo and processes it' \
+		./find-debuginfo ;;\
+	  * ) : ;; \
+	esac
 
 noinst_HEADERS= tools/ansidecl.h \
 		tools/hashtab.h \
 		tools/md5.h \
 		tools/sha1.h
 
-EXTRA_DIST = README COPYING COPYING3 COPYING.LIB scripts/find-debuginfo
+EXTRA_DIST = README COPYING COPYING3 COPYING.LIB scripts/find-debuginfo.in

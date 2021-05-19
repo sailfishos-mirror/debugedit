@@ -31,7 +31,7 @@ debugedit.1
 sepdebugcrcfix
 sepdebugcrcfix.1
 
-scripts/find-debuginfo
+find-debuginfo
 find-debuginfo.1
 
 atconfig
