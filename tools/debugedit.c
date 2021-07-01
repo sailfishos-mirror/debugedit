@@ -771,10 +771,14 @@ no_memory:
         {
 	  if (t->nattr == size)
 	    {
+	      struct abbrev_tag *orig_t = t;
 	      size += 10;
 	      t = realloc (t, sizeof (*t) + size * sizeof (struct abbrev_attr));
 	      if (t == NULL)
-		goto no_memory;
+		{
+		  free (orig_t);
+		  goto no_memory;
+		}
 	    }
 	  form = read_uleb128 (ptr);
 	  if (form == 2
