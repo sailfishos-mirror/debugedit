@@ -561,10 +561,11 @@ setup_relbuf (DSO *dso, debug_section *sec, int *reltype)
 	continue;
       /* Only consider relocations against .debug_str, .debug_line,
 	 .debug_line_str, and .debug_abbrev.  */
-      if (sym.st_shndx != debug_sections[DEBUG_STR].sec
-	  && sym.st_shndx != debug_sections[DEBUG_LINE].sec
-	  && sym.st_shndx != debug_sections[DEBUG_LINE_STR].sec
-	  && sym.st_shndx != debug_sections[DEBUG_ABBREV].sec)
+      if (sym.st_shndx == 0 ||
+	  (sym.st_shndx != debug_sections[DEBUG_STR].sec
+	   && sym.st_shndx != debug_sections[DEBUG_LINE].sec
+	   && sym.st_shndx != debug_sections[DEBUG_LINE_STR].sec
+	   && sym.st_shndx != debug_sections[DEBUG_ABBREV].sec))
 	continue;
       rela.r_addend += sym.st_value;
       rtype = ELF64_R_TYPE (rela.r_info);
@@ -625,8 +626,8 @@ setup_relbuf (DSO *dso, debug_section *sec, int *reltype)
 #endif
 	default:
 	fail:
-	  error (1, 0, "%s: Unhandled relocation %d in %s section",
-		 dso->filename, rtype, sec->name);
+	  error (1, 0, "%s: Unhandled relocation %d at [%d] for %s section",
+		 dso->filename, rtype, ndx, sec->name);
 	}
       relend->ptr = sec->data
 	+ (rela.r_offset - base);
