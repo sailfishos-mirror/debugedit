@@ -352,7 +352,8 @@ main (int argc, char **argv)
 	}
 
       /* Make sure we can read and write */
-      chmod (fname, stat_buf.st_mode | S_IRUSR | S_IWUSR);
+      if (chmod (fname, stat_buf.st_mode | S_IRUSR | S_IWUSR) != 0)
+	error (0, errno, _("cannot chmod \"%s\" to make sure we can read and write"), fname);
 
       bool failed = false;
       int fd = open64 (fname, O_RDWR);
@@ -389,7 +390,8 @@ main (int argc, char **argv)
 	}
 
       /* Restore old access rights. Including any suid bits reset. */
-      chmod (fname, stat_buf.st_mode);
+      if (chmod (fname, stat_buf.st_mode) != 0)
+	error (0, errno, _("cannot chmod \"%s\" to restore old access rights"), fname);
 
       if (failed)
 	failed_count++;
