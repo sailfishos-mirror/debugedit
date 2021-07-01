@@ -3424,7 +3424,8 @@ main (int argc, char *argv[])
     }
 
   /* Make sure we can read and write */
-  chmod (file, stat_buf.st_mode | S_IRUSR | S_IWUSR);
+  if (chmod (file, stat_buf.st_mode | S_IRUSR | S_IWUSR) != 0)
+    error (0, errno, "Failed to chmod input file '%s' to make sure we can read and write", file);
 
   fd = open (file, O_RDWR);
   if (fd < 0)
@@ -3640,7 +3641,8 @@ main (int argc, char *argv[])
   close (fd);
 
   /* Restore old access rights */
-  chmod (file, stat_buf.st_mode);
+  if (chmod (file, stat_buf.st_mode) != 0)
+    error (0, errno, "Failed to chmod input file '%s' to restore old access rights", file);
 
   free ((char *) dso->filename);
   destroy_strings (&dso->debug_str);
