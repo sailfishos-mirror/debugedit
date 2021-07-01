@@ -1789,7 +1789,7 @@ read_dwarf4_line (DSO *dso, unsigned char *ptr, char *comp_dir,
 		{
 		  ssize_t ret = write (list_file_fd, p, size);
 		  if (ret == -1)
-		    break;
+		    error (1, errno, "Could not write to '%s'", list_file);
 		  size -= ret;
 		  p += ret;
 		}
@@ -2009,7 +2009,7 @@ read_dwarf5_line_entries (DSO *dso, unsigned char **ptrp,
 		    {
 		      ssize_t ret = write (list_file_fd, p, size);
 		      if (ret == -1)
-			break;
+			error (1, errno, "Could not write to '%s'", list_file);
 		      size -= ret;
 		      p += ret;
 		    }
@@ -2352,7 +2352,7 @@ edit_attributes (DSO *dso, unsigned char *ptr, struct abbrev_tag *t, int phase)
 	    {
 	      ssize_t ret = write (list_file_fd, p, size);
 	      if (ret == -1)
-		break;
+		error (1, errno, "Could not write to '%s'", list_file);
 	      size -= ret;
 	      p += ret;
 	    }
@@ -2360,10 +2360,13 @@ edit_attributes (DSO *dso, unsigned char *ptr, struct abbrev_tag *t, int phase)
 	     regular files. */
 	  if (size == 0)
 	    {
+	      ssize_t ret;
 	      if (*(p - 1) != '/')
-		write (list_file_fd, "/", 2);
+		ret = write (list_file_fd, "/", 2);
 	      else
-		write (list_file_fd, "", 1);
+		ret = write (list_file_fd, "", 1);
+	      if (ret == -1)
+		error (1, errno, "Could not write to '%s'", list_file);
 	    }
 	}
     }
