@@ -258,10 +258,13 @@ process (Elf *elf, int fd, const char *fname)
 	  continue;
 	}
       const uint8_t *zerop = memchr (data->d_buf, '\0', data->d_size);
-      const uint8_t *crcp = (zerop == NULL
-			     ? NULL
-			     : (const uint8_t *) ((uintptr_t) (zerop + 1 + 3)
-						  & -4));
+      if (zerop == NULL)
+	{
+	  error (0, 0, _("no file string in section \"%s\" # %zu in \"%s\""),
+		 scnname, elf_ndxscn (scn), fname);
+	  continue;
+	}
+      const uint8_t *crcp = (const uint8_t *) ((uintptr_t) (zerop + 1 + 3) & -4);
       if (crcp + 4 != (uint8_t *) data->d_buf + data->d_size)
 	{
 	  error (0, 0, _("invalid format of section \"%s\" # %zu in \"%s\""),
