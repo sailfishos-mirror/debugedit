@@ -666,3 +666,27 @@ readelf --debug-dump=macro ./foobarbaz.exe \
 ]],[0],[expout])
 
 AT_CLEANUP
+
+# ===
+# source list mode dwarf-4
+# ===
+AT_SETUP([debugedit --list-file DWARF4])
+AT_KEYWORDS([debuginfo] [debugedit])
+echo "int main () { }" > main.c
+$CC $CFLAGS -gdwarf-4 -o main main.c
+AT_CHECK([[debugedit -l sources.list main]])
+AT_CHECK([[grep -q main.c sources.list]])
+cat sources.list
+AT_CLEANUP
+
+# ===
+# source list mode dwarf-5
+# ===
+AT_SETUP([debugedit --list-file DWARF5])
+AT_KEYWORDS([debuginfo] [debugedit])
+AT_SKIP_IF([test "$GDWARF_5_FLAG" = "no"])
+echo "int main () { }" > main.c
+$CC $CFLAGS -gdwarf-5 -o main main.c
+AT_CHECK([[debugedit -l sources.list main]])
+AT_CHECK([[grep -q main.c sources.list]])
+AT_CLEANUP

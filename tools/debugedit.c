@@ -1831,8 +1831,8 @@ read_dwarf5_line_entries (DSO *dso, unsigned char **ptrp,
   /* file_names_count */
   unsigned entry_count = read_uleb128 (*ptrp);
 
-  bool collecting_dirs = dest_dir && phase == 0 && *dirs == NULL;
-  bool writing_files = dest_dir && phase == 0 && *dirs != NULL;
+  bool collecting_dirs = phase == 0 && *dirs == NULL;
+  bool writing_files = phase == 0 && *dirs != NULL;
   if (collecting_dirs)
     {
       *ndir = entry_count;
@@ -1862,15 +1862,19 @@ read_dwarf5_line_entries (DSO *dso, unsigned char **ptrp,
 		{
 		case DW_FORM_strp:
 		case DW_FORM_line_strp:
-		  if (dest_dir && phase == 0)
+		  if (phase == 0)
 		    {
 		      size_t idx = do_read_32_relocated (*ptrp);
-		      if (record_file_string_entry_idx (line_strp, dso, idx))
+		      if (dest_dir)
 			{
-			  if (line_strp)
-			    need_line_strp_update = true;
-			  else
-			    need_strp_update = true;
+			  if (record_file_string_entry_idx (line_strp, dso,
+							    idx))
+			    {
+			      if (line_strp)
+				need_line_strp_update = true;
+			      else
+				need_strp_update = true;
+			    }
 			}
 		      handled_strp = true;
 		      if (collecting_dirs || writing_files)
@@ -1956,7 +1960,7 @@ read_dwarf5_line_entries (DSO *dso, unsigned char **ptrp,
       if (writing_files)
 	{
 	  char *comp_dir = (*dirs)[0];
-	  size_t comp_dir_len = strlen(comp_dir);
+	  size_t comp_dir_len = !comp_dir ? 0 : strlen(comp_dir);
 	  size_t file_len = strlen (file);
 	  size_t dir_len = strlen (dir);
 
