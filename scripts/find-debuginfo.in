@@ -146,24 +146,6 @@ n_jobs=1
 # exit early on --version or --help
 done=false
 
-# Currently this scripts depends on some RPM environment variables
-# being set.  RPM_BUILD_ROOT as the installation root directory.
-# RPM_BUILD_DIR as the top build dir (usually one above BUILDDIR).
-# And RPM_PACKAGE_NAME, RPM_PACKAGE_VERSION, RPM_PACKAGE_RELEASE,
-# RPM_ARCH to create an unique (dir) name. Warn if they aren't set.
-if test -z "${RPM_BUILD_ROOT}"; then
-    echo "RPM_BUILD_ROOT not set"
-    exit 1;
-fi
-if test -z "${RPM_BUILD_DIR}"; then
-    echo "RPM_BUILD_DIR not set"
-    exit 1;
-fi
-if test -z "${RPM_PACKAGE_NAME}"; then
-    echo "RPM_PACKAGE_NAME not set"
-    exit 1;
-fi
-
 BUILDDIR=.
 out=debugfiles.list
 srcout=
@@ -277,6 +259,24 @@ done
 
 # version or help given
 if [ "$done" = "true" ]; then exit 0; fi
+
+# Currently this scripts depends on some RPM environment variables
+# being set.  RPM_BUILD_ROOT as the installation root directory.
+# RPM_BUILD_DIR as the top build dir (usually one above BUILDDIR).
+# And RPM_PACKAGE_NAME, RPM_PACKAGE_VERSION, RPM_PACKAGE_RELEASE,
+# RPM_ARCH to create an unique (dir) name. Warn if they aren't set.
+if test -z "${RPM_BUILD_ROOT}"; then
+    echo "RPM_BUILD_ROOT not set"
+    exit 1;
+fi
+if test -z "${RPM_BUILD_DIR}"; then
+    echo "RPM_BUILD_DIR not set"
+    exit 1;
+fi
+if test -z "${RPM_PACKAGE_NAME}"; then
+    echo "RPM_PACKAGE_NAME not set"
+    exit 1;
+fi
 
 if test -n "$build_id_seed" -a "$no_recompute_build_id" = "true"; then
   echo >&2 "*** ERROR: --build-id-seed (unique build-ids) and -n (do not recompute build-id) cannot be used together"
