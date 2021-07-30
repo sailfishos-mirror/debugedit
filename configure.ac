@@ -87,6 +87,20 @@ CFLAGS="$save_CFLAGS"
 GDWARF_5_FLAG=$ac_cv_gdwarf_5
 AC_SUBST([GDWARF_5_FLAG])
 
+AC_CACHE_CHECK([whether -gdwarf-5 produced DWARF5 .debug_line], ac_cv_dwarf_5_debugline, [dnl
+save_CFLAGS="$CFLAGS"
+CFLAGS="-gdwarf-5"
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([[int i=0;]],[[/* empty main */]])],
+  [if $READELF --debug-dump=line conftest.o 2>&1 | \
+   grep "DWARF Version:" 2>&1 | grep "5" > /dev/null 2>&1; \
+     then ac_cv_dwarf_5_debugline=yes; \
+     else ac_cv_dwarf_5_debugline=no; fi],
+  ac_cv_dwarf_5_debugline=no)
+CFLAGS="$save_CFLAGS"
+])
+DWARF_5_DEBUGLINE=$ac_cv_dwarf_5_debugline
+AC_SUBST([DWARF_5_DEBUGLINE])
+
 AC_CACHE_CHECK([whether gcc supports -gz=none], ac_cv_gz_none, [dnl
 save_CFLAGS="$CFLAGS"
 CFLAGS="-gz=none"

@@ -488,10 +488,12 @@ AT_CLEANUP
 AT_SETUP([debugedit .debug_line objects DWARF5])
 AT_KEYWORDS([debuginfo] [debugedit])
 AT_SKIP_IF([test "$GDWARF_5_FLAG" = "no"])
+AT_SKIP_IF([test "$DWARF_5_DEBUGLINE" = "no"])
 DEBUGEDIT_SETUP([-gdwarf-5])
 
 AT_DATA([expout],
 [foo/bar/baz
+foo/bar/baz/subdir_bar
 foo/bar/baz/subdir_headers
 ])
 
@@ -500,8 +502,8 @@ AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./subdir_bar/bar.o]])
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./baz.o]])
 AT_CHECK([[
 $READELF --debug-dump=line foo.o subdir_bar/bar.o baz.o \
-        | grep -A5 "The Directory Table" | grep "^  [123]" \
-	| cut -f2- -d/ | grep ^foo/ | sort
+	| grep -A5 "The Directory Table" | grep "^  [0123]" \
+	| cut -f2- -d/ | grep ^foo/ | sort -u
 ]],[0],[expout])
 
 AT_CLEANUP
@@ -535,18 +537,20 @@ AT_CLEANUP
 AT_SETUP([debugedit .debug_line partial DWARF5])
 AT_KEYWORDS([debuginfo] [debugedit])
 AT_SKIP_IF([test "$GDWARF_5_FLAG" = "no"])
+AT_SKIP_IF([test "$DWARF_5_DEBUGLINE" = "no"])
 DEBUGEDIT_SETUP([-gdwarf-5])
 
 AT_DATA([expout],
 [foo/bar/baz
+foo/bar/baz/subdir_bar
 foo/bar/baz/subdir_headers
 ])
 
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foobarbaz.part.o]])
 AT_CHECK([[
 $READELF --debug-dump=line ./foobarbaz.part.o \
-        | grep -A5 "The Directory Table" | grep "^  [123]" \
-	| cut -f2- -d/ | grep ^foo/ | sort
+	| grep -A5 "The Directory Table" | grep "^  [0123]" \
+	| cut -f2- -d/ | grep ^foo/ | sort -u
 ]],[0],[expout])
 
 AT_CLEANUP
@@ -580,18 +584,20 @@ AT_CLEANUP
 AT_SETUP([debugedit .debug_line exe DWARF5])
 AT_KEYWORDS([debuginfo] [debugedit])
 AT_SKIP_IF([test "$GDWARF_5_FLAG" = "no"])
+AT_SKIP_IF([test "$DWARF_5_DEBUGLINE" = "no"])
 DEBUGEDIT_SETUP([-gdwarf-5])
 
 AT_DATA([expout],
 [foo/bar/baz
+foo/bar/baz/subdir_bar
 foo/bar/baz/subdir_headers
 ])
 
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foobarbaz.exe]])
 AT_CHECK([[
 $READELF --debug-dump=line ./foobarbaz.exe \
-        | grep -A5 "The Directory Table" | grep "^  [123]" \
-	| cut -f2- -d/ | grep ^foo/ | sort
+	| grep -A5 "The Directory Table" | grep "^  [0123]" \
+	| cut -f2- -d/ | grep ^foo/ | sort -u
 ]],[0],[expout])
 
 AT_CLEANUP
