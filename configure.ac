@@ -44,6 +44,7 @@ AC_PROG_SED
 AC_PROG_CC_C99
 AC_PROG_LN_S
 AC_CHECK_TOOL([LD], [ld])
+AC_CHECK_TOOL([READELF], [readelf])
 AM_MISSING_PROG(HELP2MAN, help2man)
 
 # Only really an issue on 32bit platforms. Makes sure we'll get large off_t.

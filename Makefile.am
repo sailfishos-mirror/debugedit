@@ -32,7 +32,8 @@ CLEANFILES = $(bin_SCRIPTS)
 
 # Some standard substitutions for scripts
 do_subst = ($(SED) -e 's,[@]PACKAGE[@],$(PACKAGE),g' \
-		   -e 's,[@]VERSION[@],$(VERSION),g')
+		   -e 's,[@]VERSION[@],$(VERSION),g' \
+		   -e 's,[@]READELF[@],$(READELF),g')
 
 find-debuginfo: $(top_srcdir)/scripts/find-debuginfo.in Makefile
 	$(do_subst) < "$(top_srcdir)/scripts/$@.in" > "$@"
