@@ -168,7 +168,6 @@ while [ $# -gt 0 ]; do
     ;;
   --dwz-single-file-mode)
     dwz_single_file_mode=true
-    shift
     ;;
   --build-id-seed)
     build_id_seed=$2
