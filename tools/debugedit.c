@@ -3273,7 +3273,7 @@ handle_build_id (DSO *dso, Elf_Data *build_id,
 	  else
 	    sha1_process_bytes (x.d_buf, x.d_size, &sha1_ctx);
 
-	  if (u.shdr.sh_type != SHT_NOBITS)
+	  if (dso->shdr[i].sh_type != SHT_NOBITS)
 	    {
 	      Elf_Data *d = elf_getdata (dso->scn[i], NULL);
 	      if (d == NULL)
