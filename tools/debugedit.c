@@ -590,6 +590,10 @@ setup_relbuf (DSO *dso, debug_section *sec, int *reltype)
 	  if (rtype != R_390_32)
 	    goto fail;
 	  break;
+	case EM_PARISC:
+	  if (rtype != R_PARISC_DIR32)
+	    goto fail;
+	  break;
 	case EM_IA_64:
 	  if (rtype != R_IA64_SECREL32LSB)
 	    goto fail;
