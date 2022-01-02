@@ -3047,7 +3047,7 @@ static struct option optionsTable[] =
     { NULL, 0, 0, 0 }
   };
 
-static const char *optionsChars = "b:d:l:is:nV?";
+static const char *optionsChars = "b:d:l:is:nV?u";
 
 static const char *helpText =
   "Usage: %s [OPTION...] FILE\n"
