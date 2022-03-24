@@ -2586,7 +2586,8 @@ edit_dwarf2 (DSO *dso)
         const char *name = strptr (dso, dso->ehdr.e_shstrndx,
 				   dso->shdr[i].sh_name);
 
-	if (strncmp (name, ".debug_", sizeof (".debug_") - 1) == 0)
+	if (name != NULL
+	    && strncmp (name, ".debug_", sizeof (".debug_") - 1) == 0)
 	  {
 	    for (j = 0; debug_sections[j].name; ++j)
 	      if (strcmp (name, debug_sections[j].name) == 0)
@@ -2642,9 +2643,11 @@ edit_dwarf2 (DSO *dso)
 	  }
 	else if (dso->ehdr.e_type == ET_REL
 		 && ((dso->shdr[i].sh_type == SHT_REL
+		      && name != NULL
 		      && strncmp (name, ".rel.debug_",
 				  sizeof (".rel.debug_") - 1) == 0)
 		     || (dso->shdr[i].sh_type == SHT_RELA
+			 && name != NULL
 			 && strncmp (name, ".rela.debug_",
 				     sizeof (".rela.debug_") - 1) == 0)))
 	  {
@@ -3467,13 +3470,13 @@ main (int argc, char *argv[])
 	case SHT_PROGBITS:
 	  name = strptr (dso, dso->ehdr.e_shstrndx, dso->shdr[i].sh_name);
 	  /* TODO: Handle stabs */
-	  if (strcmp (name, ".stab") == 0)
+	  if (name != NULL && strcmp (name, ".stab") == 0)
 	    {
 	      error (0, 0, "Stabs debuginfo not supported: %s", file);
 	      break;
 	    }
 	  if (!(do_build_id && no_recompute_build_id && !base_dir && !dest_dir)
-	      && strcmp (name, ".debug_info") == 0)
+	      && name != NULL && strcmp (name, ".debug_info") == 0)
 	    edit_dwarf2 (dso);
 
 	  break;
