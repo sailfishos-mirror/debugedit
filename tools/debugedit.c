@@ -1,4 +1,5 @@
 /* Copyright (C) 2001-2003, 2005, 2007, 2009-2011, 2016, 2017 Red Hat, Inc.
+   Copyright (C) 2022 Mark J. Wielaard <mark@klomp.org>
    Written by Alexander Larsson <alexl@redhat.com>, 2002
    Based on code by Jakub Jelinek <jakub@redhat.com>, 2001.
    String/Line table rewriting by Mark Wielaard <mjw@redhat.com>, 2017.
@@ -295,25 +296,9 @@ buf_read_ube32 (unsigned char *data)
 }
 
 static const char *
-strptr (DSO *dso, int sec, off_t offset)
+strptr (DSO *dso, size_t sec, size_t offset)
 {
-  Elf_Scn *scn;
-  Elf_Data *data;
-
-  scn = dso->scn[sec];
-  if (offset >= 0 && (GElf_Addr) offset < dso->shdr[sec].sh_size)
-    {
-      data = NULL;
-      while ((data = elf_getdata (scn, data)) != NULL)
-	{
-	  if (data->d_buf
-	      && offset >= data->d_off
-	      && offset < data->d_off + data->d_size)
-	    return (const char *) data->d_buf + (offset - data->d_off);
-	}
-    }
-
-  return NULL;
+  return elf_strptr (dso->elf, sec, offset);
 }
 
 
