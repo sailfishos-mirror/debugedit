@@ -41,6 +41,7 @@
 
 #include <gelf.h>
 #include <dwarf.h>
+#include <libelf.h>
 
 #ifndef MAX
 #define MAX(m, n) ((m) < (n) ? (n) : (m))
@@ -117,6 +118,10 @@ static bool need_line_strp_update = false;
 /* If the debug_line changes size we will need to update the
    DW_AT_stmt_list attributes indexes in the debug_info. */
 static bool need_stmt_update = false;
+
+/* If we recompress any debug section we need to write out the ELF
+   again. */
+static bool recompressed = false;
 
 /* Storage for dynamically allocated strings to put into string
    table. Keep together in memory blocks of 16K. */
@@ -250,6 +255,7 @@ typedef struct debug_section
     REL *relbuf;
     REL *relend;
     bool rel_updated;
+    uint32_t ch_type;
     /* Only happens for COMDAT .debug_macro and .debug_types.  */
     struct debug_section *next;
   } debug_section;
@@ -1503,15 +1509,21 @@ static void
 edit_dwarf2_line (DSO *dso)
 {
   Elf_Data *linedata = debug_sections[DEBUG_LINE].elf_data;
-  int linendx = debug_sections[DEBUG_LINE].sec;
-  Elf_Scn *linescn = dso->scn[linendx];
   unsigned char *old_buf = linedata->d_buf;
 
-  /* Out with the old. */
-  linedata->d_size = 0;
+  /* A nicer way to do this would be to set the original d_size to
+     zero and add a new Elf_Data section to contain the new data.
+     Out with the old. In with the new.
 
-  /* In with the new. */
+  int linendx = debug_sections[DEBUG_LINE].sec;
+  Elf_Scn *linescn = dso->scn[linendx];
+  linedata->d_size = 0;
   linedata = elf_newdata (linescn);
+
+    But when we then (recompress) the section there is a bug in
+    elfutils < 0.192 that causes the compression to fail/create bad
+    compressed data. So we just reuse the existing linedata (possibly
+    loosing track of the original d_buf, which will be overwritten).  */
 
   dso->lines.line_buf = malloc (dso->lines.debug_lines_len);
   if (dso->lines.line_buf == NULL)
@@ -1660,6 +1672,7 @@ edit_dwarf2_line (DSO *dso)
       memcpy (ptr, optr, remaining);
       ptr += remaining;
     }
+  elf_flagdata (linedata, ELF_C_SET, ELF_F_DIRTY);
 }
 
 /* Record or adjust (according to phase) DW_FORM_strp or DW_FORM_line_strp.
@@ -2744,13 +2757,20 @@ edit_dwarf2_any_str (DSO *dso, struct strings *strings, debug_section *secp)
 {
   Strtab *strtab = strings->str_tab;
   Elf_Data *strdata = secp->elf_data;
+
+  /* A nicer way to do this would be to set the original d_size to
+     zero and add a new Elf_Data section to contain the new data.
+     Out with the old. In with the new.
+
   int strndx = secp->sec;
   Elf_Scn *strscn = dso->scn[strndx];
-
-  /* Out with the old. */
   strdata->d_size = 0;
-  /* In with the new. */
   strdata = elf_newdata (strscn);
+
+    But when we then (recompress) the section there is a bug in
+    elfutils < 0.192 that causes the compression to fail/create bad
+    compressed data. So we just reuse the existing strdata (possibly
+    loosing track of the original d_buf, which will be overwritten).  */
 
   /* We really should check whether we had enough memory,
      but the old ebl version will just abort on out of
@@ -2758,6 +2778,7 @@ edit_dwarf2_any_str (DSO *dso, struct strings *strings, debug_section *secp)
   strtab_finalize (strtab, strdata);
   secp->size = strdata->d_size;
   strings->str_buf = strdata->d_buf;
+  elf_flagdata (strdata, ELF_C_SET, ELF_F_DIRTY);
 }
 
 /* Rebuild .debug_str_offsets.  */
@@ -2869,6 +2890,22 @@ edit_dwarf2 (DSO *dso)
 		    }
 
 		  scn = dso->scn[i];
+
+		  /* Check for compressed DWARF headers. Records
+		     ch_type so we can recompress headers after we
+		     processed the data.  */
+		  if (dso->shdr[i].sh_flags & SHF_COMPRESSED)
+		    {
+		      GElf_Chdr chdr;
+		      if (gelf_getchdr(dso->scn[i], &chdr) == NULL)
+			error (1, 0, "Couldn't get compressed header: %s",
+			       elf_errmsg (-1));
+		      debug_sec->ch_type = chdr.ch_type;
+		      if (elf_compress (scn, 0, 0) < 0)
+			error (1, 0, "Failed decompression");
+		      gelf_getshdr (scn, &dso->shdr[i]);
+		    }
+
 		  data = elf_getdata (scn, NULL);
 		  assert (data != NULL && data->d_buf != NULL);
 		  assert (elf_getdata (scn, data) == NULL);
@@ -3743,6 +3780,35 @@ main (int argc, char *argv[])
 	}
     }
 
+  /* Recompress any debug sections that might have been uncompressed.  */
+  if (dirty_elf)
+    for (int s = 0; debug_sections[s].name; s++)
+      {
+	for (struct debug_section *secp = &debug_sections[s]; secp != NULL;
+	     secp = secp->next)
+	  {
+	    if (secp->ch_type != 0)
+	      {
+		int sec = secp->sec;
+		Elf_Scn *scn = dso->scn[sec];
+		GElf_Shdr shdr = dso->shdr[sec];
+		Elf_Data *data;
+		data = elf_getdata (scn, NULL);
+		if (elf_compress (scn, secp->ch_type, 0) < 0)
+		  error (1, 0, "Failed recompression");
+		gelf_getshdr (scn, &shdr);
+		dso->shdr[secp->sec] = shdr;
+		data = elf_getdata (scn, NULL);
+		secp->elf_data = data;
+		secp->data = data->d_buf;
+		secp->size = data->d_size;
+		elf_flagshdr (scn, ELF_C_SET, ELF_F_DIRTY);
+		elf_flagdata (data, ELF_C_SET, ELF_F_DIRTY);
+		recompressed = 1;
+	      }
+	  }
+      }
+
   /* Normally we only need to explicitly update the section headers
      and data when any section data changed size. But because of a bug
      in elfutils before 0.169 we will have to update and write out all
@@ -3750,7 +3816,8 @@ main (int argc, char *argv[])
      set). https://sourceware.org/bugzilla/show_bug.cgi?id=21199 */
   bool need_update = (need_strp_update
 		      || need_line_strp_update
-		      || need_stmt_update);
+		      || need_stmt_update
+		      || recompressed);
 
 #if !_ELFUTILS_PREREQ (0, 169)
   /* string replacements or build_id updates don't change section size. */
@@ -3887,7 +3954,8 @@ main (int argc, char *argv[])
        || need_line_strp_update
        || need_stmt_update
        || dirty_elf
-       || (build_id && !no_recompute_build_id))
+       || (build_id && !no_recompute_build_id)
+       || recompressed)
       && elf_update (dso->elf, ELF_C_WRITE) < 0)
     {
       error (1, 0, "Failed to write file: %s", elf_errmsg (elf_errno()));

@@ -136,6 +136,19 @@ else
 fi
 AC_SUBST([GZ_NONE_FLAG])
 
+AC_CACHE_CHECK([whether gcc supports -gz=zlib], ac_cv_gz_zlib, [dnl
+save_CFLAGS="$CFLAGS"
+CFLAGS="-gz=zlib"
+AC_LINK_IFELSE([AC_LANG_PROGRAM()], ac_cv_gz_zlib=yes, ac_cv_gz_zlib=no)
+CFLAGS="$save_CFLAGS"
+])
+if test "$ac_cv_gz_zlib" = "yes"; then
+  GZ_ZLIB_FLAG="-gz=zlib"
+else
+  GZ_ZLIB_FLAG=""
+fi
+AC_SUBST([GZ_ZLIB_FLAG])
+
 AC_CACHE_CHECK([whether compiler needs -fdebug-macro], ac_cv_debug_macro, [dnl
 save_CFLAGS="$CFLAGS"
 CFLAGS="-fdebug-macro"

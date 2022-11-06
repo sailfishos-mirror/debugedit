@@ -1,6 +1,6 @@
 # debugedit.at: Tests for the debugedit tool
 #
-# Copyright (C) 2019 Mark J. Wielaard <mark@klomp.org>
+# Copyright (C) 2019, 2024 Mark J. Wielaard <mark@klomp.org>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,7 +22,11 @@ AT_BANNER([debugedit])
 AT_TESTED([debugedit])
 
 # Helper to create some test binaries.
-# Optional parameter can specify additional gcc parameters.
+# Optional fist parameter can specify additional gcc parameters.
+# e.g. -gdwarf-4 or -gdwarf-5 for explicit DWARF version.
+# -g3 is always given. Second parameter can be a compression flag
+# like $GZ_ZLIB_FLAG (if it exists), when not given $GZ_NONE_FLAG
+# is used.
 m4_define([DEBUGEDIT_SETUP],[[
 # Create some test binaries. Create and build them in different subdirs
 # to make sure they produce different relative/absolute paths.
@@ -36,12 +40,19 @@ mkdir subdir_headers
 cp "${abs_srcdir}"/data/SOURCES/foobar.h subdir_headers
 cp "${abs_srcdir}"/data/SOURCES/baz.c .
 
+# Check second param, if given use compression
+if test -z "$2"; then
+GZ_FLAG=$GZ_NONE_FLAG
+else
+GZ_FLAG=$2
+fi
+
 # First three object files (foo.o subdir_bar/bar.o and baz.o)
-$CC $CFLAGS -g3 $GZ_NONE_FLAG -Isubdir_headers $1 -c subdir_foo/foo.c
+$CC $CFLAGS -g3 $GZ_FLAG -Isubdir_headers $1 -c subdir_foo/foo.c
 cd subdir_bar
-$CC $CFLAGS -g3 $GZ_NONE_FLAG -I../subdir_headers $1 -c bar.c
+$CC $CFLAGS -g3 $GZ_FLAG -I../subdir_headers $1 -c bar.c
 cd ..
-$CC $CFLAGS -g3 $GZ_NONE_FLAG -I$(pwd)/subdir_headers $1 -c $(pwd)/baz.c
+$CC $CFLAGS -g3 $GZ_FLAG -I$(pwd)/subdir_headers $1 -c $(pwd)/baz.c
 
 # Then a partially linked object file (somewhat like a kernel module).
 # This will still have relocations between the debug sections.
@@ -49,7 +60,7 @@ $LD $LDFLAGS -r -o foobarbaz.part.o foo.o subdir_bar/bar.o baz.o
 
 # Create an executable. Relocations between debug sections will
 # have been resolved.
-$CC $CFLAGS -g3 $GZ_NONE_FLAG -o foobarbaz.exe foo.o subdir_bar/bar.o baz.o
+$CC $CFLAGS -g3 $GZ_FLAG $1 -o foobarbaz.exe foo.o subdir_bar/bar.o baz.o
 ]])
 
 # ===
@@ -83,6 +94,17 @@ AT_CHECK([[./foobarbaz.exe]])
 
 AT_CLEANUP
 
+AT_SETUP([debugedit executable (compressed)])
+AT_KEYWORDS([debuginfo] [debugedit])
+AT_SKIP_IF([test -z "$GZ_ZLIB_FLAG"])
+DEBUGEDIT_SETUP([], [$GZ_ZLIB_FLAG])
+
+AT_CHECK([[./foobarbaz.exe]])
+AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foobarbaz.exe]])
+AT_CHECK([[./foobarbaz.exe]])
+
+AT_CLEANUP
+
 # ===
 # debugedit should at least replace the .debug_str directory paths
 # in the objects.
@@ -93,9 +115,9 @@ DEBUGEDIT_SETUP([-gdwarf-4])
 
 # Capture strings that start with the testdir (pwd) directory path
 # (and replace that textually with /foo/bar/baz)
-($READELF -p.debug_str foo.o; \
- $READELF -p.debug_str subdir_bar/bar.o; \
- $READELF -p.debug_str baz.o) \
+($READELF -zp.debug_str foo.o; \
+ $READELF -zp.debug_str subdir_bar/bar.o; \
+ $READELF -zp.debug_str baz.o) \
 	| cut -c13- \
         | grep ^$(pwd) | sort \
         | sed -e "s@$(pwd)@/foo/bar/baz@" > expout
@@ -111,9 +133,9 @@ AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foo.o]])
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./subdir_bar/bar.o]])
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./baz.o]])
 AT_CHECK([[
-($READELF -p.debug_str foo.o; \
- $READELF -p.debug_str subdir_bar/bar.o; \
- $READELF -p.debug_str baz.o) \
+($READELF -zp.debug_str foo.o; \
+ $READELF -zp.debug_str subdir_bar/bar.o; \
+ $READELF -zp.debug_str baz.o) \
 	| cut -c13- \
         | grep ^/foo/bar/baz | sort
 ]],[0],[expout])
@@ -131,9 +153,9 @@ DEBUGEDIT_SETUP([-gdwarf-5])
 
 # Capture strings that start with the testdir (pwd) directory path
 # (and replace that textually with /foo/bar/baz)
-($READELF -p.debug_str -p.debug_line_str foo.o; \
- $READELF -p.debug_str -p.debug_line_str subdir_bar/bar.o; \
- $READELF -p.debug_str -p.debug_line_str baz.o) \
+($READELF -zp.debug_str -zp.debug_line_str foo.o; \
+ $READELF -zp.debug_str -zp.debug_line_str subdir_bar/bar.o; \
+ $READELF -zp.debug_str -zp.debug_line_str baz.o) \
         | cut -c13- \
         | grep ^$(pwd) | sort | uniq \
         | sed -e "s@$(pwd)@/foo/bar/baz@" > expout
@@ -149,9 +171,9 @@ AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foo.o]])
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./subdir_bar/bar.o]])
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./baz.o]])
 AT_CHECK([[
-($READELF -p.debug_str -p.debug_line_str foo.o; \
- $READELF -p.debug_str -p.debug_line_str subdir_bar/bar.o; \
- $READELF -p.debug_str -p.debug_line_str baz.o) \
+($READELF -zp.debug_str -zp.debug_line_str foo.o; \
+ $READELF -zp.debug_str -zp.debug_line_str subdir_bar/bar.o; \
+ $READELF -zp.debug_str -zp.debug_line_str baz.o) \
         | cut -c13- \
         | grep ^/foo/bar/baz | sort | uniq
 ]],[0],[expout],[ignore])
@@ -170,7 +192,7 @@ DEBUGEDIT_SETUP([-gdwarf-4])
 # (and replace that textually with /foo/bar/baz)
 # Note that partially linked files, might have multiple duplicate
 # strings, but debugedit will merge them. So use sort -u.
-$READELF -p.debug_str ./foobarbaz.part.o | cut -c13- \
+$READELF -zp.debug_str ./foobarbaz.part.o | cut -c13- \
         | grep ^$(pwd) | sort -u \
         | sed -e "s@$(pwd)@/foo/bar/baz@" > expout
 
@@ -183,7 +205,7 @@ fi
 # Check the replaced strings are all there.
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foobarbaz.part.o]])
 AT_CHECK([[
-$READELF -p.debug_str ./foobarbaz.part.o | cut -c13- \
+$READELF -zp.debug_str ./foobarbaz.part.o | cut -c13- \
         | grep ^/foo/bar/baz | sort
 ]],[0],[expout])
 
@@ -202,7 +224,7 @@ DEBUGEDIT_SETUP([-gdwarf-5])
 # (and replace that textually with /foo/bar/baz)
 # Note that partially linked files, might have multiple duplicate
 # strings, but debugedit will merge them. So use sort -u.
-$READELF -p.debug_str -p.debug_line_str ./foobarbaz.part.o | cut -c13- \
+$READELF -zp.debug_str -zp.debug_line_str ./foobarbaz.part.o | cut -c13- \
         | grep ^$(pwd) | sort -u | uniq \
         | sed -e "s@$(pwd)@/foo/bar/baz@" > expout
 
@@ -215,7 +237,7 @@ fi
 # Check the replaced strings are all there.
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foobarbaz.part.o]])
 AT_CHECK([[
-$READELF -p.debug_str -p.debug_line_str ./foobarbaz.part.o | cut -c13- \
+$READELF -zp.debug_str -zp.debug_line_str ./foobarbaz.part.o | cut -c13- \
         | grep ^/foo/bar/baz | sort | uniq
 ]],[0],[expout],[ignore])
 
@@ -231,7 +253,7 @@ DEBUGEDIT_SETUP([-gdwarf-4])
 
 # Capture strings that start with the testdir (pwd) directory path
 # (and replace that textually with /foo/bar/baz)
-$READELF -p.debug_str foobarbaz.exe | cut -c13- \
+$READELF -zp.debug_str foobarbaz.exe | cut -c13- \
         | grep ^$(pwd) | sort \
         | sed -e "s@$(pwd)@/foo/bar/baz@" > expout
 
@@ -245,7 +267,7 @@ fi
 # Check the replaced strings are all there.
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foobarbaz.exe]])
 AT_CHECK([[
-$READELF -p.debug_str foobarbaz.exe | cut -c13- \
+$READELF -zp.debug_str foobarbaz.exe | cut -c13- \
         | grep ^/foo/bar/baz | sort
 ]],[0],[expout])
 
@@ -262,7 +284,7 @@ DEBUGEDIT_SETUP([-gdwarf-5])
 
 # Capture strings that start with the testdir (pwd) directory path
 # (and replace that textually with /foo/bar/baz)
-$READELF -p.debug_str -p.debug_line_str foobarbaz.exe | cut -c13- \
+$READELF -zp.debug_str -zp.debug_line_str foobarbaz.exe | cut -c13- \
         | grep ^$(pwd) | sort | uniq \
         | sed -e "s@$(pwd)@/foo/bar/baz@" > expout
 
@@ -276,7 +298,7 @@ fi
 # Check the replaced strings are all there.
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foobarbaz.exe]])
 AT_CHECK([[
-$READELF -p.debug_str -p.debug_line_str foobarbaz.exe | cut -c13- \
+$READELF -zp.debug_str -zp.debug_line_str foobarbaz.exe | cut -c13- \
         | grep ^/foo/bar/baz | sort | uniq
 ]],[0],[expout],[ignore])
 
@@ -324,6 +346,30 @@ AT_CHECK([[
 
 AT_CLEANUP
 
+AT_SETUP([debugedit .debug_info objects (compressed)])
+AT_KEYWORDS([debuginfo] [debugedit])
+AT_SKIP_IF([test -z "$GZ_ZLIB_FLAG"])
+DEBUGEDIT_SETUP([], [$GZ_ZLIB_FLAG])
+
+AT_DATA([expout],
+[/foo/bar/baz
+/foo/bar/baz/baz.c
+/foo/bar/baz/subdir_bar
+])
+
+AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foo.o]])
+AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./subdir_bar/bar.o]])
+AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./baz.o]])
+AT_CHECK([[
+($READELF --debug-dump=info foo.o; \
+ $READELF --debug-dump=info subdir_bar/bar.o; \
+ $READELF --debug-dump=info baz.o) \
+        | grep -E 'DW_AT_(name|comp_dir)' \
+        | rev | cut -d: -f1 | rev | cut -c2- | grep ^/foo/bar/baz | sort -u
+]],[0],[expout])
+
+AT_CLEANUP
+
 # ===
 # Make sure DW_AT_name and DW_AT_comp_dir strings are replaced
 # in partial linked object.
@@ -347,6 +393,26 @@ $READELF --debug-dump=info ./foobarbaz.part.o \
 
 AT_CLEANUP
 
+AT_SETUP([debugedit .debug_info partial (compressed)])
+AT_KEYWORDS([debuginfo] [debugedit])
+AT_SKIP_IF([test -z "$GZ_ZLIB_FLAG"])
+DEBUGEDIT_SETUP([], [$GZ_ZLIB_FLAG])
+
+AT_DATA([expout],
+[/foo/bar/baz
+/foo/bar/baz/baz.c
+/foo/bar/baz/subdir_bar
+])
+
+AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foobarbaz.part.o]])
+AT_CHECK([[
+$READELF --debug-dump=info ./foobarbaz.part.o \
+        | grep -E 'DW_AT_(name|comp_dir)' \
+        | rev | cut -d: -f1 | rev | cut -c2- | grep ^/foo/bar/baz | sort -u
+]],[0],[expout])
+
+AT_CLEANUP
+
 # ===
 # Make sure DW_AT_name and DW_AT_comp_dir strings are replaced
 # in executable.
@@ -354,6 +420,25 @@ AT_CLEANUP
 AT_SETUP([debugedit .debug_info exe])
 AT_KEYWORDS([debuginfo] [debugedit])
 DEBUGEDIT_SETUP
+
+AT_DATA([expout],
+[/foo/bar/baz
+/foo/bar/baz/baz.c
+/foo/bar/baz/subdir_bar
+])
+
+AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foobarbaz.exe]])
+AT_CHECK([[
+$READELF --debug-dump=info ./foobarbaz.exe | grep -E 'DW_AT_(name|comp_dir)' \
+        | rev | cut -d: -f1 | rev | cut -c2- | grep ^/foo/bar/baz | sort -u
+]],[0],[expout])
+
+AT_CLEANUP
+
+AT_SETUP([debugedit .debug_info exe (compressed)])
+AT_KEYWORDS([debuginfo] [debugedit])
+AT_SKIP_IF([test -z "$GZ_ZLIB_FLAG"])
+DEBUGEDIT_SETUP([], [$GZ_ZLIB_FLAG])
 
 AT_DATA([expout],
 [/foo/bar/baz
@@ -725,6 +810,26 @@ $READELF --debug-dump=macro ./foobarbaz.exe \
 
 AT_CLEANUP
 
+AT_SETUP([debugedit .debug_macro exe (compressed)])
+AT_KEYWORDS([debuginfo] [debugedit])
+AT_SKIP_IF([test -z "$GZ_ZLIB_FLAG"])
+DEBUGEDIT_SETUP([$DEBUG_MACRO_FLAG], [$GZ_ZLIB_FLAG])
+
+# We expect 3 for each compile unit.
+AT_DATA([expout],
+[NUMBER 42
+NUMBER 42
+NUMBER 42
+])
+
+AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foobarbaz.exe]])
+AT_CHECK([[
+$READELF --debug-dump=macro ./foobarbaz.exe \
+        | grep NUMBER | rev | cut -d: -f1 | rev | cut -c2-
+]],[0],[expout])
+
+AT_CLEANUP
+
 # ===
 # source list mode dwarf-4
 # ===
@@ -749,6 +854,28 @@ AT_CHECK([[debugedit -l sources.list main]])
 AT_CHECK([[grep -q main.c sources.list]])
 AT_CLEANUP
 
+# ===
+# source list with compression dwarf-4
+# ===
+AT_SETUP([debugedit --list-file compressed DWARF4])
+AT_KEYWORDS([debuginfo] [debugedit])
+echo "int main () { }" > main.c
+$CC $CFLAGS $GZ_ZLIB_FLAG -gdwarf-4 -o main main.c
+AT_CHECK([[debugedit -l sources.list main]])
+AT_CHECK([[grep -q main.c sources.list]])
+AT_CLEANUP
+
+# ===
+# source list with compression dwarf-5
+# ===
+AT_SETUP([debugedit --list-file compressed DWARF5])
+AT_KEYWORDS([debuginfo] [debugedit])
+AT_SKIP_IF([test "$GDWARF_5_FLAG" = "no"])
+echo "int main () { }" > main.c
+$CC $CFLAGS $GZ_ZLIB_FLAG -gdwarf-5 -o main main.c
+AT_CHECK([[debugedit -l sources.list main]])
+AT_CHECK([[grep -q main.c sources.list]])
+AT_CLEANUP
 
 # ===
 # build-id recomputation
