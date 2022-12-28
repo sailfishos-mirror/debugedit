@@ -3460,7 +3460,9 @@ main (int argc, char *argv[])
 	      error (0, 0, "Stabs debuginfo not supported: %s", file);
 	      break;
 	    }
-	  if (!(do_build_id && no_recompute_build_id && !base_dir && !dest_dir)
+	  /* We only have to go over the DIE tree if we are rewriting paths
+	     or listing sources.  */
+	  if ((base_dir != NULL || dest_dir != NULL || list_file_fd != -1)
 	      && name != NULL && strcmp (name, ".debug_info") == 0)
 	    edit_dwarf2 (dso);
 
