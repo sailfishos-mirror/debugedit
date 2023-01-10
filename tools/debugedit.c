@@ -613,6 +613,12 @@ setup_relbuf (DSO *dso, debug_section *sec, int *reltype)
 		  goto fail;
 	  break;
 #endif
+#if defined(EM_LOONGARCH) && defined(R_LARCH_32)
+  case EM_LOONGARCH:
+    if (rtype != R_LARCH_32)
+      goto fail;
+    break;
+#endif
 	default:
 	fail:
 	  error (1, 0, "%s: Unhandled relocation %d at [%d] for %s section",
