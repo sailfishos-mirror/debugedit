@@ -47,6 +47,27 @@ AC_CHECK_TOOL([LD], [ld])
 AC_CHECK_TOOL([READELF], [readelf])
 AM_MISSING_PROG(HELP2MAN, help2man)
 
+# Whether dwz support -j.
+# Make sure to compile something with -g.
+# Run dwz on it with -j1.
+DWZ_J=""
+AC_CHECK_PROG([DWZ], [dwz], [dwz])
+if test "x$DWZ" = "xdwz"; then
+  save_CFLAGS="$CFLAGS"
+  CFLAGS="$save_CFLAGS -g"
+  AC_CACHE_CHECK([whether the dwz support -j], ac_cv_dwz_j, [dnl
+    AC_LINK_IFELSE([AC_LANG_PROGRAM()],[dnl
+      ac_cv_dwz_j=yes; ${DWZ} -j1 conftest$EXEEXT 2>/dev/null || ac_cv_dwz_j=no],
+      AC_MSG_FAILURE([unexpected compile failure]))])
+  if test "x$ac_cv_dwz_j" = "xyes"; then
+    DWZ_J="-j"
+  fi
+  CFLAGS="$save_CFLAGS"
+else
+  AC_MSG_WARN([dwz not installed])
+fi
+AC_SUBST([DWZ_J])
+
 # Only really an issue on 32bit platforms. Makes sure we'll get large off_t.
 AC_SYS_LARGEFILE
 

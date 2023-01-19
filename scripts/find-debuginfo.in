@@ -586,6 +586,7 @@ if $run_dwz \
     done
     dwz_multifile_name="${dwz_multifile_name}${dwz_multifile_suffix}"
     dwz_opts="-h -q -r"
+    [ -n "@DWZ_J@" ] && dwz_opts="${dwz_opts} -j ${n_jobs}"
     [ ${#dwz_files[@]} -gt 1 ] && [ "$dwz_single_file_mode" = "false" ] \
       && dwz_opts="${dwz_opts} -m .dwz/${dwz_multifile_name}"
     mkdir -p "${RPM_BUILD_ROOT}/usr/lib/debug/.dwz"
