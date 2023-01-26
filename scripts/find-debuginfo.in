@@ -26,7 +26,7 @@ Usage: find-debuginfo [OPTION]... [builddir]
 automagically generates debug info and file lists
 
 Options:
-[--strict-build-id] [-g] [-r] [-m] [-i] [-n]
+[--strict-build-id] [-g] [-r] [-m] [-i] [-n] [-q]
 [--keep-section SECTION] [--remove-section SECTION]
 [--g-libs]
 [-j N] [--jobs N]
@@ -94,6 +94,8 @@ will be called /usr/debug/src/<BASE>.  This makes sure the debug source
 dirs are unique between package version, release and achitecture (Use
 --unique-debug-src-base "%{name}-%{VERSION}-%{RELEASE}.%{_arch}")
 
+The -q or --quiet flag silences non-error output from the script.
+
 All file names in switches are relative to builddir ('.' if not given).
 EOF
 }
@@ -145,6 +147,9 @@ n_jobs=1
 
 # exit early on --version or --help
 done=false
+
+# silence non-error output
+quiet=false
 
 BUILDDIR=.
 out=debugfiles.list
@@ -238,6 +243,9 @@ while [ $# -gt 0 ]; do
   -S)
     srcout=$2
     shift
+    ;;
+  -q|--quiet)
+    quiet=true
     ;;
   --version)
     echo "find-debuginfo @VERSION@"
@@ -437,7 +445,7 @@ do_file()
   get_debugfn "$f"
   [ -f "${debugfn}" ] && return
 
-  echo "extracting debug info from $f"
+  $quiet || echo "extracting debug info from $f"
   # See also cpio SOURCEFILE copy. Directories must match up.
   debug_base_name="$RPM_BUILD_DIR"
   debug_dest_name="/usr/src/debug"
@@ -513,7 +521,7 @@ do_file()
     grep "^$inum " "$temp/linked" | while read inum linked; do
       link=$debugfn
       get_debugfn "$linked"
-      echo "hard linked $link to $debugfn"
+      $quiet || echo "hard linked $link to $debugfn"
       mkdir -p "$(dirname "$debugfn")" && ln -nf "$link" "$debugfn"
     done
   fi
@@ -576,7 +584,7 @@ if $run_dwz \
    && [ -d "${RPM_BUILD_ROOT}/usr/lib/debug" ]; then
   readarray dwz_files < <(cd "${RPM_BUILD_ROOT}/usr/lib/debug"; find -type f -name \*.debug | LC_ALL=C sort)
   if [ ${#dwz_files[@]} -gt 0 ]; then
-    size_before=$(du -sk ${RPM_BUILD_ROOT}/usr/lib/debug | cut -f1)
+    $quiet || size_before=$(du -sk ${RPM_BUILD_ROOT}/usr/lib/debug | cut -f1)
     dwz_multifile_name="${RPM_PACKAGE_NAME}-${RPM_PACKAGE_VERSION}-${RPM_PACKAGE_RELEASE}.${RPM_ARCH}"
     dwz_multifile_suffix=
     dwz_multifile_idx=0
@@ -600,8 +608,8 @@ if $run_dwz \
       echo >&2 "*** ERROR: DWARF compression requested, but no dwz installed"
       exit 2
     fi
-    size_after=$(du -sk ${RPM_BUILD_ROOT}/usr/lib/debug | cut -f1)
-    echo "original debug info size: ${size_before}kB, size after compression: ${size_after}kB"
+    $quiet || size_after=$(du -sk ${RPM_BUILD_ROOT}/usr/lib/debug | cut -f1)
+    $quiet || echo "original debug info size: ${size_before}kB, size after compression: ${size_after}kB"
     # Remove .dwz directory if empty
     rmdir "${RPM_BUILD_ROOT}/usr/lib/debug/.dwz" 2>/dev/null
 
@@ -621,7 +629,7 @@ do
   f=${f#$RPM_BUILD_ROOT}
   t=${t#$RPM_BUILD_ROOT}
   if [ -f "$debugdir$t" ]; then
-    echo "symlinked /usr/lib/debug$t to /usr/lib/debug${f}.debug"
+    $quiet || echo "symlinked /usr/lib/debug$t to /usr/lib/debug${f}.debug"
     debug_link "/usr/lib/debug$t" "${f}.debug"
   fi
 done
