@@ -125,7 +125,7 @@ AC_SUBST([DWARF_5_DEBUGLINE])
 AC_CACHE_CHECK([whether gcc supports -gz=none], ac_cv_gz_none, [dnl
 save_CFLAGS="$CFLAGS"
 CFLAGS="-gz=none"
-AC_COMPILE_IFELSE([AC_LANG_SOURCE()], ac_cv_gz_none=yes, ac_cv_gz_none=no)
+AC_LINK_IFELSE([AC_LANG_SOURCE()], ac_cv_gz_none=yes, ac_cv_gz_none=no)
 CFLAGS="$save_CFLAGS"
 ])
 if test "$ac_cv_gz_none" = "yes"; then
