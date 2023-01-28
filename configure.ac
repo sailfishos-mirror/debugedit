@@ -41,7 +41,7 @@ AC_USE_SYSTEM_EXTENSIONS
 # Checks for programs.
 AC_PROG_AWK
 AC_PROG_SED
-AC_PROG_CC_C99
+m4_version_prereq([2.70], [AC_PROG_CC], [AC_PROG_CC_C99])
 AC_PROG_LN_S
 AC_CHECK_TOOL([LD], [ld])
 AC_CHECK_TOOL([READELF], [readelf])
