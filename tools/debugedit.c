@@ -3185,7 +3185,7 @@ handle_build_id (DSO *dso, Elf_Data *build_id,
 
   if (build_id_size != 16 && build_id_size != 20)
     {
-      error (1, 0, "Cannot handle %Zu-byte build ID", build_id_size);
+      error (1, 0, "Cannot handle %zu-byte build ID", build_id_size);
     }
 
   int i = -1;
