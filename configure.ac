@@ -135,6 +135,19 @@ else
 fi
 AC_SUBST([GZ_NONE_FLAG])
 
+AC_CACHE_CHECK([whether compiler needs -fdebug-macro], ac_cv_debug_macro, [dnl
+save_CFLAGS="$CFLAGS"
+CFLAGS="-fdebug-macro"
+AC_LINK_IFELSE([AC_LANG_PROGRAM()], ac_cv_debug_macro=yes, ac_cv_debug_macro=no)
+CFLAGS="$save_CFLAGS"
+])
+if test "$ac_cv_debug_macro" = "yes"; then
+  DEBUG_MACRO_FLAG="-fdebug-macro"
+else
+  DEBUG_MACRO_FLAG=""
+fi
+AC_SUBST([DEBUG_MACRO_FLAG])
+
 # And generate the output files.
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
