@@ -364,6 +364,7 @@ AT_CLEANUP
 AT_SETUP([debugedit .debug_types objects])
 AT_KEYWORDS([debugtypes] [debugedit])
 DEBUGEDIT_SETUP([-fdebug-types-section -gdwarf-4])
+AT_SKIP_IF([! $READELF -S ./foo.o ./subdir_bar/bar.o ./baz.o | grep -F -q '.debug_types'])
 
 AT_DATA([expout],
 [st1
@@ -401,6 +402,7 @@ AT_CLEANUP
 AT_SETUP([debugedit .debug_types partial])
 AT_KEYWORDS([debugtypes] [debugedit])
 DEBUGEDIT_SETUP([-fdebug-types-section -gdwarf-4])
+AT_SKIP_IF([! $READELF -S ./foobarbaz.part.o | grep -F -q '.debug_types'])
 
 AT_DATA([expout],
 [st1
@@ -430,6 +432,7 @@ AT_CLEANUP
 AT_SETUP([debugedit .debug_types exe])
 AT_KEYWORDS([debugtypes] [debugedit])
 DEBUGEDIT_SETUP([-fdebug-types-section -gdwarf-4])
+AT_SKIP_IF([! $READELF -S ./foobarbaz.exe | grep -F -q '.debug_types'])
 
 AT_DATA([expout],
 [st1
