@@ -575,7 +575,10 @@ else
       exit 1
     fi
   done
-  cat "$temp"/debugsources.* >"$SOURCEFILE"
+  # List of sources may have lots of duplicates. A kernel build was seen
+  # with this list reaching 448 megabytes in size. "sort" helps to not have
+  # _two_ sets of 448 megabytes of temp files here.
+  LC_ALL=C sort -z -u "$temp"/debugsources.* >"$SOURCEFILE"
   cat "$temp"/elfbins.* >"$ELFBINSFILE"
 fi
 
