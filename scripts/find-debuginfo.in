@@ -26,7 +26,7 @@ Usage: find-debuginfo [OPTION]... [builddir]
 automagically generates debug info and file lists
 
 Options:
-[--strict-build-id] [-g] [-r] [-m] [-i] [-n] [-q]
+[--strict-build-id] [-g] [-r] [-m] [-i] [-n] [-q] [-v]
 [--keep-section SECTION] [--remove-section SECTION]
 [--g-libs]
 [-j N] [--jobs N]
@@ -94,7 +94,9 @@ will be called /usr/debug/src/<BASE>.  This makes sure the debug source
 dirs are unique between package version, release and achitecture (Use
 --unique-debug-src-base "%{name}-%{VERSION}-%{RELEASE}.%{_arch}")
 
-The -q or --quiet flag silences non-error output from the script.
+The -q or --quiet flag silences all non-error output from the script.
+The -v or --verbose flag add more output for all files processed.
+When neither -q or -v is given then only output for each pass is given.
 
 All file names in switches are relative to builddir ('.' if not given).
 EOF
@@ -150,8 +152,11 @@ n_jobs=1
 # exit early on --version or --help
 done=false
 
-# silence non-error output
+# silence all output
 quiet=false
+
+# add more non-error output
+verbose=false
 
 BUILDDIR=.
 out=debugfiles.list
@@ -248,6 +253,11 @@ while [ $# -gt 0 ]; do
     ;;
   -q|--quiet)
     quiet=true
+    verbose=false
+    ;;
+  -v|--verbose)
+    quiet=false
+    verbose=true
     ;;
   --version)
     echo "find-debuginfo @VERSION@"
@@ -290,6 +300,8 @@ if [ "$strip_g" = "true" ] && [ "$strip_glibs" = "true" ]; then
   echo >&2 "*** ERROR: -g  and --g-libs cannot be used together"
   exit 2
 fi
+
+$quiet || echo "find-debuginfo: starting" 2>&1
 
 i=0
 while ((i < nout)); do
@@ -447,7 +459,7 @@ do_file()
   get_debugfn "$f"
   [ -f "${debugfn}" ] && return
 
-  $quiet || echo "extracting debug info from $f"
+  $verbose && echo "extracting debug info from $f"
   # See also cpio SOURCEFILE copy. Directories must match up.
   debug_base_name="$RPM_BUILD_DIR"
   debug_dest_name="/usr/src/debug"
@@ -523,7 +535,7 @@ do_file()
     grep "^$inum " "$temp/linked" | while read inum linked; do
       link=$debugfn
       get_debugfn "$linked"
-      $quiet || echo "hard linked $link to $debugfn"
+      $verbose && echo "hard linked $link to $debugfn"
       mkdir -p "$(dirname "$debugfn")" && ln -nf "$link" "$debugfn"
     done
   fi
@@ -551,6 +563,7 @@ run_job()
 }
 
 n_files=$(wc -l <"$temp/primary")
+$quiet || echo "Extracting debug info from $n_files files" 2>&1
 if [ $n_jobs -gt $n_files ]; then
   n_jobs=$n_files
 fi
@@ -589,7 +602,8 @@ if $run_dwz \
    && [ -d "${RPM_BUILD_ROOT}/usr/lib/debug" ]; then
   readarray dwz_files < <(cd "${RPM_BUILD_ROOT}/usr/lib/debug"; find -type f -name \*.debug | LC_ALL=C sort)
   if [ ${#dwz_files[@]} -gt 0 ]; then
-    $quiet || size_before=$(du -sk ${RPM_BUILD_ROOT}/usr/lib/debug | cut -f1)
+    $quiet || echo "DWARF-compressing ${#dwz_files[@]} files" 2>&1
+    $verbose && size_before=$(du -sk ${RPM_BUILD_ROOT}/usr/lib/debug | cut -f1)
     dwz_multifile_name="${RPM_PACKAGE_NAME}-${RPM_PACKAGE_VERSION}-${RPM_PACKAGE_RELEASE}.${RPM_ARCH}"
     dwz_multifile_suffix=
     dwz_multifile_idx=0
@@ -613,8 +627,8 @@ if $run_dwz \
       echo >&2 "*** ERROR: DWARF compression requested, but no dwz installed"
       exit 2
     fi
-    $quiet || size_after=$(du -sk ${RPM_BUILD_ROOT}/usr/lib/debug | cut -f1)
-    $quiet || echo "original debug info size: ${size_before}kB, size after compression: ${size_after}kB"
+    $verbose && size_after=$(du -sk ${RPM_BUILD_ROOT}/usr/lib/debug | cut -f1)
+    $verbose && echo "original debug info size: ${size_before}kB, size after compression: ${size_after}kB"
     # Remove .dwz directory if empty
     rmdir "${RPM_BUILD_ROOT}/usr/lib/debug/.dwz" 2>/dev/null
 
@@ -627,6 +641,7 @@ fi
 
 # For each symlink whose target has a .debug file,
 # make a .debug symlink to that file.
+$quiet || echo "Creating .debug symlinks for symlinks to ELF files" 2>&1
 find "$RPM_BUILD_ROOT" ! -path "${debugdir}/*" -type l -print |
 while read f
 do
@@ -634,7 +649,7 @@ do
   f=${f#$RPM_BUILD_ROOT}
   t=${t#$RPM_BUILD_ROOT}
   if [ -f "$debugdir$t" ]; then
-    $quiet || echo "symlinked /usr/lib/debug$t to /usr/lib/debug${f}.debug"
+    $verbose && echo "symlinked /usr/lib/debug$t to /usr/lib/debug${f}.debug"
     debug_link "/usr/lib/debug$t" "${f}.debug"
   fi
 done
@@ -648,6 +663,7 @@ if [ -s "$SOURCEFILE" ]; then
     debug_dest_name="/usr/src/debug/${unique_debug_src_base}"
   fi
 
+  $quiet || echo "Copying sources found by 'debugedit -l' to ${debug_dest_name}" 2>&1
   mkdir -p "${RPM_BUILD_ROOT}${debug_dest_name}"
   # Filter out anything compiler generated which isn't a source file.
   # e.g. <internal>, <built-in>, <__thread_local_inner macros>.
@@ -763,3 +779,5 @@ if ((nout > 0)); then
   cat "$LISTFILE" >> "${LISTFILE}.new"
   mv "${LISTFILE}.new" "$LISTFILE"
 fi
+
+$quiet || echo "find-debuginfo: done" 2>&1
