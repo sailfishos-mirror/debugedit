@@ -101,7 +101,9 @@ EOF
 }
 
 # Figure out where we are installed so we can call other helper scripts.
+# Prefix to PATH to prefer tools from install dir.
 install_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PATH=${install_dir}:$PATH
 
 # With -g arg, pass it to strip on libraries or executables.
 strip_g=false
@@ -457,7 +459,7 @@ do_file()
   if [ "$no_recompute_build_id" = "true" ]; then
     no_recompute="-n"
   fi
-  id=$(${install_dir}/debugedit -b "$debug_base_name" -d "$debug_dest_name" \
+  id=$(debugedit -b "$debug_base_name" -d "$debug_dest_name" \
 			      $no_recompute -i \
 			      ${build_id_seed:+--build-id-seed="$build_id_seed"} \
 			      -l "$SOURCEFILE" "$f") || exit
@@ -619,7 +621,7 @@ if $run_dwz \
     # dwz invalidates .gnu_debuglink CRC32 in the main files.
     cat "$ELFBINSFILE" |
     (cd "$RPM_BUILD_ROOT"; \
-     tr '\n' '\0' | xargs -0 ${install_dir}/sepdebugcrcfix usr/lib/debug)
+     tr '\n' '\0' | xargs -0 sepdebugcrcfix usr/lib/debug)
   fi
 fi
 
