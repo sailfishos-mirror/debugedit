@@ -670,7 +670,7 @@ if [ -s "$SOURCEFILE" ]; then
   # Some compilers generate them as if they are part of the working
   # directory (which is why we match against ^ or /).
   LC_ALL=C sort -z -u "$SOURCEFILE" | grep -E -v -z '(^|/)<[a-z _-]+>$' |
-  (cd "${debug_base_name}"; cpio -pd0mL "${RPM_BUILD_ROOT}${debug_dest_name}")
+  (cd "${debug_base_name}"; cpio -pd0mL --quiet "${RPM_BUILD_ROOT}${debug_dest_name}")
   # stupid cpio creates new directories in mode 0700,
   # and non-standard modes may be inherented from original directories, fixup
   find "${RPM_BUILD_ROOT}${debug_dest_name}" -type d -print0 |
