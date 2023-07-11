@@ -139,7 +139,7 @@ crc32 (const char *fname, const char *base_fname, uint32_t *crcp)
       error (0, errno, _("cannot open \"%s\""), debugname);
       return false;
     }
-  off64_t size = lseek64 (fd, 0, SEEK_END);
+  off_t size = lseek (fd, 0, SEEK_END);
   if (size == -1)
     {
       error (0, errno, _("cannot get size of \"%s\""), debugname);
@@ -284,7 +284,7 @@ process (Elf *elf, int fd, const char *fname)
 	  return true;
 	}
       updated_count++;
-      off64_t seekto = (shdr->sh_offset + data->d_off
+      off_t seekto = (shdr->sh_offset + data->d_off
 			+ (crcp - (const uint8_t *) data->d_buf));
       uint32_t crc_targetendian = (ehdr->e_ident[EI_DATA] == ELFDATA2LSB
 				   ? htole32 (crc) : htobe32 (crc));
@@ -356,7 +356,7 @@ main (int argc, char **argv)
 	error (0, errno, _("cannot chmod \"%s\" to make sure we can read and write"), fname);
 
       bool failed = false;
-      int fd = open64 (fname, O_RDWR);
+      int fd = open (fname, O_RDWR);
       if (fd == -1)
 	{
 	  error (0, errno, _("cannot open \"%s\""), fname);
