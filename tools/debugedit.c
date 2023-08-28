@@ -3054,7 +3054,7 @@ static const char *helpText =
   "  -s, --build-id-seed=STRING      if recomputing the build ID note use\n"
   "                                  this string as hash seed\n"
   "  -n, --no-recompute-build-id     do not recompute build ID note even\n"
-  "                                  when-i or -s are given\n"
+  "                                  when -i or -s are given\n"
   "\n"
   "Help options:\n"
   "  -?, --help                      Show this help message\n"
