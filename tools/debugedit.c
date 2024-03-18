@@ -3261,7 +3261,10 @@ fdopen_dso (int fd, const char *name)
   DSO *dso = NULL;
   size_t phnum;
 
-  elf = elf_begin (fd, ELF_C_RDWR, NULL);
+  if (dest_dir == NULL && (!do_build_id || no_recompute_build_id))
+    elf = elf_begin (fd, ELF_C_READ, NULL);
+  else
+    elf = elf_begin (fd, ELF_C_RDWR, NULL);
   if (elf == NULL)
     {
       error (0, 0, "cannot open ELF file: %s", elf_errmsg (-1));
@@ -3600,7 +3603,10 @@ main (int argc, char *argv[])
   if (chmod (file, stat_buf.st_mode | S_IRUSR | S_IWUSR) != 0)
     error (0, errno, "Failed to chmod input file '%s' to make sure we can read and write", file);
 
-  fd = open (file, O_RDWR);
+  if (dest_dir == NULL && (!do_build_id || no_recompute_build_id))
+    fd = open (file, O_RDONLY);
+  else
+    fd = open (file, O_RDWR);
   if (fd < 0)
     {
       error (1, errno, "Failed to open input file '%s'", file);
@@ -3805,7 +3811,16 @@ main (int argc, char *argv[])
   if (do_build_id && build_id != NULL)
     handle_build_id (dso, build_id, build_id_offset, build_id_size);
 
-  if (elf_update (dso->elf, ELF_C_WRITE) < 0)
+  /* If we have done any string replacement or rewrote any section
+     data or did a build_id rewrite we need to write out the new ELF
+     image.  */
+  if ((need_string_replacement
+       || need_strp_update
+       || need_line_strp_update
+       || need_stmt_update
+       || dirty_elf
+       || (build_id && !no_recompute_build_id))
+      && elf_update (dso->elf, ELF_C_WRITE) < 0)
     {
       error (1, 0, "Failed to write file: %s", elf_errmsg (elf_errno()));
     }
