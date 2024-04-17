@@ -335,12 +335,28 @@ strptr (DSO *dso, size_t sec, size_t offset)
 REL *relptr, *relend;
 int reltype;
 
+static inline REL *
+find_rel_for_ptr (unsigned char *xptr)
+{
+  size_t l = 0, r = relend - relptr;
+  while (l < r)
+    {
+      size_t m = (l + r) / 2;
+      if (relptr[m].ptr < xptr)
+	l = m + 1;
+      else if (relptr[m].ptr > xptr)
+	r = m;
+      else
+	return &relptr[m];
+    }
+  return relend;
+}
+
 #define do_read_32_relocated(xptr) ({			\
   uint32_t dret = do_read_32 (xptr);			\
   if (relptr)						\
     {							\
-      while (relptr < relend && relptr->ptr < (xptr))	\
-	++relptr;					\
+      relptr = find_rel_for_ptr (xptr);			\
       if (relptr < relend && relptr->ptr == (xptr))	\
 	{						\
 	  if (reltype == SHT_REL)			\
