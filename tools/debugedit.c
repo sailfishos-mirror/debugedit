@@ -2731,10 +2731,10 @@ update_str_offsets (DSO *dso)
       if (unit_length == 0xffffffff || endp - ptr < unit_length)
 	break;
       unsigned char *endidxp = ptr + unit_length;
-      uint32_t version = read_32 (ptr);
+      uint32_t version = read_16 (ptr);
       if (version != 5)
 	break;
-      uint32_t padding = read_32 (ptr);
+      uint32_t padding = read_16 (ptr);
       if (padding != 0)
 	break;
 
