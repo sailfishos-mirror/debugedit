@@ -1,5 +1,5 @@
 /* Copyright (C) 2001-2003, 2005, 2007, 2009-2011, 2016, 2017 Red Hat, Inc.
-   Copyright (C) 2022, 2023 Mark J. Wielaard <mark@klomp.org>
+   Copyright (C) 2022, 2023, 2024 Mark J. Wielaard <mark@klomp.org>
    Written by Alexander Larsson <alexl@redhat.com>, 2002
    Based on code by Jakub Jelinek <jakub@redhat.com>, 2001.
    String/Line table rewriting by Mark Wielaard <mjw@redhat.com>, 2017.
@@ -204,6 +204,77 @@ typedef struct
   GElf_Shdr shdr[0];
 } DSO;
 
+typedef struct
+{
+  unsigned char *ptr;
+  uint32_t addend;
+  int ndx;
+} REL;
+
+typedef struct
+{
+  Elf64_Addr r_offset;
+  int ndx;
+} LINE_REL;
+
+typedef struct debug_section
+  {
+    const char *name;
+    unsigned char *data;
+    Elf_Data *elf_data;
+    size_t size;
+    int sec, relsec;
+    int reltype;
+    REL *relbuf;
+    REL *relend;
+    bool rel_updated;
+    /* Only happens for COMDAT .debug_macro and .debug_types.  */
+    struct debug_section *next;
+  } debug_section;
+
+static debug_section debug_sections[] =
+  {
+#define DEBUG_INFO	0
+#define DEBUG_ABBREV	1
+#define DEBUG_LINE	2
+#define DEBUG_ARANGES	3
+#define DEBUG_PUBNAMES	4
+#define DEBUG_PUBTYPES	5
+#define DEBUG_MACINFO	6
+#define DEBUG_LOC	7
+#define DEBUG_STR	8
+#define DEBUG_FRAME	9
+#define DEBUG_RANGES	10
+#define DEBUG_TYPES	11
+#define DEBUG_MACRO	12
+#define DEBUG_GDB_SCRIPT	13
+#define DEBUG_RNGLISTS	14
+#define DEBUG_LINE_STR	15
+#define DEBUG_ADDR	16
+#define DEBUG_STR_OFFSETS	17
+#define DEBUG_LOCLISTS	18
+    { ".debug_info",		},
+    { ".debug_abbrev",		},
+    { ".debug_line",		},
+    { ".debug_aranges",		},
+    { ".debug_pubnames",	},
+    { ".debug_pubtypes",	},
+    { ".debug_macinfo",		},
+    { ".debug_loc",		},
+    { ".debug_str",		},
+    { ".debug_frame",		},
+    { ".debug_ranges",		},
+    { ".debug_types",		},
+    { ".debug_macro",		},
+    { ".debug_gdb_scripts",	},
+    { ".debug_rnglists",	},
+    { ".debug_line_str",	},
+    { ".debug_addr",		},
+    { ".debug_str_offsets",	},
+    { ".debug_loclists",	},
+    { NULL,			}
+  };
+
 static void
 setup_lines (struct debug_lines *lines)
 {
@@ -220,19 +291,6 @@ destroy_lines (struct debug_lines *lines)
   free (lines->table);
   free (lines->line_buf);
 }
-
-typedef struct
-{
-  unsigned char *ptr;
-  uint32_t addend;
-  int ndx;
-} REL;
-
-typedef struct
-{
-  Elf64_Addr r_offset;
-  int ndx;
-} LINE_REL;
 
 #define read_uleb128(ptr) ({		\
   unsigned int ret = 0;			\
@@ -332,12 +390,18 @@ strptr (DSO *dso, size_t sec, size_t offset)
   ret;							\
 })
 
-REL *relptr, *relend;
-int reltype;
+/* Used for do_write_32_relocated, which can only be called
+   immediately following do_read_32_relocated.  */
+REL *last_relptr;
+REL *last_relend;
+int last_reltype;
+struct debug_section *last_sec;
 
 static inline REL *
-find_rel_for_ptr (unsigned char *xptr)
+find_rel_for_ptr (unsigned char *xptr, struct debug_section *sec)
 {
+  REL *relptr = sec->relbuf;
+  REL *relend = sec->relend;
   size_t l = 0, r = relend - relptr;
   while (l < r)
     {
@@ -352,11 +416,14 @@ find_rel_for_ptr (unsigned char *xptr)
   return relend;
 }
 
-#define do_read_32_relocated(xptr) ({			\
+#define do_read_32_relocated(xptr, xsec) ({		\
   uint32_t dret = do_read_32 (xptr);			\
+  REL *relptr = xsec->relbuf;		\
+  REL *relend = xsec->relend;		\
+  int reltype = xsec->reltype;		\
   if (relptr)						\
     {							\
-      relptr = find_rel_for_ptr (xptr);			\
+      relptr = find_rel_for_ptr (xptr, xsec);		\
       if (relptr < relend && relptr->ptr == (xptr))	\
 	{						\
 	  if (reltype == SHT_REL)			\
@@ -365,11 +432,15 @@ find_rel_for_ptr (unsigned char *xptr)
 	    dret = relptr->addend;			\
 	}						\
     }							\
+  last_relptr = relptr;					\
+  last_relend = relend;					\
+  last_reltype = reltype;				\
+  last_sec = xsec;					\
   dret;							\
 })
 
-#define read_32_relocated(ptr) ({			\
-  uint32_t ret = do_read_32_relocated (ptr);		\
+#define read_32_relocated(ptr,sec) ({			\
+  uint32_t ret = do_read_32_relocated (ptr,sec);	\
   ptr += 4;						\
   ret;							\
 })
@@ -425,17 +496,16 @@ dwarf2_write_be32 (unsigned char *p, uint32_t v)
    relend). Might just update the addend. So relocations need to be
    updated at the end.  */
 
-static bool rel_updated;
-
-#define do_write_32_relocated(ptr,val) ({ \
-  if (relptr && relptr < relend && relptr->ptr == ptr)	\
+#define do_write_32_relocated(ptr,val) ({		\
+  if (last_relptr && last_relptr < last_relend		\
+      && last_relptr->ptr == ptr)			\
     {							\
-      if (reltype == SHT_REL)				\
-	do_write_32 (ptr, val - relptr->addend);	\
+      if (last_reltype == SHT_REL)			\
+	do_write_32 (ptr, val - last_relptr->addend);	\
       else						\
 	{						\
-	  relptr->addend = val;				\
-	  rel_updated = true;				\
+	  last_relptr->addend = val;			\
+	  last_sec->rel_updated = true;	\
 	}						\
     }							\
   else							\
@@ -446,62 +516,6 @@ static bool rel_updated;
   do_write_32_relocated (ptr,val);     \
   ptr += 4;			       \
 })
-
-typedef struct debug_section
-  {
-    const char *name;
-    unsigned char *data;
-    Elf_Data *elf_data;
-    size_t size;
-    int sec, relsec;
-    REL *relbuf;
-    REL *relend;
-    /* Only happens for COMDAT .debug_macro and .debug_types.  */
-    struct debug_section *next;
-  } debug_section;
-
-static debug_section debug_sections[] =
-  {
-#define DEBUG_INFO	0
-#define DEBUG_ABBREV	1
-#define DEBUG_LINE	2
-#define DEBUG_ARANGES	3
-#define DEBUG_PUBNAMES	4
-#define DEBUG_PUBTYPES	5
-#define DEBUG_MACINFO	6
-#define DEBUG_LOC	7
-#define DEBUG_STR	8
-#define DEBUG_FRAME	9
-#define DEBUG_RANGES	10
-#define DEBUG_TYPES	11
-#define DEBUG_MACRO	12
-#define DEBUG_GDB_SCRIPT	13
-#define DEBUG_RNGLISTS	14
-#define DEBUG_LINE_STR	15
-#define DEBUG_ADDR	16
-#define DEBUG_STR_OFFSETS	17
-#define DEBUG_LOCLISTS	18
-    { ".debug_info", NULL, NULL, 0, 0, 0 },
-    { ".debug_abbrev", NULL, NULL, 0, 0, 0 },
-    { ".debug_line", NULL, NULL, 0, 0, 0 },
-    { ".debug_aranges", NULL, NULL, 0, 0, 0 },
-    { ".debug_pubnames", NULL, NULL, 0, 0, 0 },
-    { ".debug_pubtypes", NULL, NULL, 0, 0, 0 },
-    { ".debug_macinfo", NULL, NULL, 0, 0, 0 },
-    { ".debug_loc", NULL, NULL, 0, 0, 0 },
-    { ".debug_str", NULL, NULL, 0, 0, 0 },
-    { ".debug_frame", NULL, NULL, 0, 0, 0 },
-    { ".debug_ranges", NULL, NULL, 0, 0, 0 },
-    { ".debug_types", NULL, NULL, 0, 0, 0 },
-    { ".debug_macro", NULL, NULL, 0, 0, 0 },
-    { ".debug_gdb_scripts", NULL, NULL, 0, 0, 0 },
-    { ".debug_rnglists", NULL, NULL, 0, 0, 0 },
-    { ".debug_line_str", NULL, NULL, 0, 0, 0 },
-    { ".debug_addr", NULL, NULL, 0, 0, 0 },
-    { ".debug_str_offsets", NULL, NULL, 0, 0, 0 },
-    { ".debug_loclists", NULL, NULL, 0, 0, 0 },
-    { NULL, NULL, NULL, 0, 0, 0 }
-  };
 
 static int
 rel_cmp (const void *a, const void *b)
@@ -521,7 +535,7 @@ rel_cmp (const void *a, const void *b)
    for this section.  When there are relocations, will setup relend,
    as the last REL, and reltype, as SHT_REL or SHT_RELA.  */
 static void
-setup_relbuf (DSO *dso, debug_section *sec, int *reltype)
+setup_relbuf (DSO *dso, debug_section *sec)
 {
   int ndx, maxndx;
   GElf_Rel rel;
@@ -531,6 +545,7 @@ setup_relbuf (DSO *dso, debug_section *sec, int *reltype)
   Elf_Data *symdata = NULL;
   int rtype;
   REL *relbuf;
+  REL *relend;
   Elf_Scn *scn;
   Elf_Data *data;
   int i = sec->relsec;
@@ -538,8 +553,10 @@ setup_relbuf (DSO *dso, debug_section *sec, int *reltype)
   /* No relocations, or did we do this already? */
   if (i == 0 || sec->relbuf != NULL)
     {
-      relptr = sec->relbuf;
-      relend = sec->relend;
+      last_relptr = NULL;
+      last_relend = NULL;
+      last_reltype = 0;
+      last_sec = NULL;
       return;
     }
 
@@ -551,7 +568,7 @@ setup_relbuf (DSO *dso, debug_section *sec, int *reltype)
   assert (data->d_size == dso->shdr[i].sh_size);
   maxndx = dso->shdr[i].sh_size / dso->shdr[i].sh_entsize;
   relbuf = malloc (maxndx * sizeof (REL));
-  *reltype = dso->shdr[i].sh_type;
+  sec->reltype = dso->shdr[i].sh_type;
   if (relbuf == NULL)
     error (1, errno, "%s: Could not allocate memory", dso->filename);
 
@@ -675,7 +692,7 @@ setup_relbuf (DSO *dso, debug_section *sec, int *reltype)
 
   sec->relbuf = relbuf;
   sec->relend = relend;
-  relptr = relbuf;
+  last_relptr = NULL;
 }
 
 /* Updates SHT_RELA section associated with the given section based on
@@ -689,8 +706,8 @@ update_rela_data (DSO *dso, struct debug_section *sec)
   symdata = elf_getdata (dso->scn[dso->shdr[relsec_ndx].sh_link],
 			 NULL);
 
-  relptr = sec->relbuf;
-  relend = sec->relend;
+  REL *relptr = sec->relbuf;
+  REL *relend = sec->relend;
   while (relptr < relend)
     {
       GElf_Sym sym;
@@ -726,14 +743,15 @@ do_read_uleb128 (unsigned char *ptr)
 }
 
 static inline uint32_t
-do_read_str_form_relocated (DSO *dso, uint32_t form, unsigned char *ptr)
+do_read_str_form_relocated (DSO *dso, uint32_t form, unsigned char *ptr,
+			    struct debug_section *sec)
 {
   uint32_t idx;
   switch (form)
     {
     case DW_FORM_strp:
     case DW_FORM_line_strp:
-      return do_read_32_relocated (ptr);
+      return do_read_32_relocated (ptr, sec);
 
     case DW_FORM_strx1:
       idx = *ptr;
@@ -759,15 +777,11 @@ do_read_str_form_relocated (DSO *dso, uint32_t form, unsigned char *ptr)
   str_off_ptr += str_offsets_base;
   str_off_ptr += idx * 4;
 
-  /* Switch rel reading... */
-  REL *old_relptr = relptr;
-  REL *old_relend = relend;
-  setup_relbuf(dso, &debug_sections[DEBUG_STR_OFFSETS], &reltype);
+  struct debug_section *str_offsets_sec = &debug_sections[DEBUG_STR_OFFSETS];
+  setup_relbuf(dso, str_offsets_sec);
 
-  uint32_t str_off = do_read_32_relocated (str_off_ptr);
+  uint32_t str_off = do_read_32_relocated (str_off_ptr, str_offsets_sec);
 
-  relptr = old_relptr;
-  relend = old_relend;
   return str_off;
 }
 
@@ -1616,7 +1630,7 @@ edit_dwarf2_line (DSO *dso)
    Also handles DW_FORM_strx, but just for recording the (indexed) string.  */
 static void
 edit_strp (DSO *dso, uint32_t form, unsigned char *ptr, int phase,
-	   bool handled_strp)
+	   bool handled_strp, struct debug_section *sec)
 {
   unsigned char *ptr_orig = ptr;
 
@@ -1630,7 +1644,7 @@ edit_strp (DSO *dso, uint32_t form, unsigned char *ptr, int phase,
 	 recorded. */
       if (! handled_strp)
 	{
-	  size_t idx = do_read_str_form_relocated (dso, form, ptr);
+	  size_t idx = do_read_str_form_relocated (dso, form, ptr, sec);
 	  record_existing_string_entry_idx (form == DW_FORM_line_strp,
 					    dso, idx);
 	}
@@ -1644,7 +1658,7 @@ edit_strp (DSO *dso, uint32_t form, unsigned char *ptr, int phase,
       size_t idx, new_idx;
       struct strings *strings = (form == DW_FORM_line_strp
 				 ? &dso->debug_line_str : &dso->debug_str);
-      idx = do_read_32_relocated (ptr);
+      idx = do_read_32_relocated (ptr, sec);
       entry = string_find_entry (strings, idx);
       new_idx = strent_offset (entry->entry);
       do_write_32_relocated (ptr, new_idx);
@@ -1955,7 +1969,8 @@ read_dwarf5_line_entries (DSO *dso, unsigned char **ptrp,
 		case DW_FORM_line_strp:
 		  if (phase == 0)
 		    {
-		      size_t idx = do_read_32_relocated (*ptrp);
+		      debug_section *debug_sec = &debug_sections[DEBUG_LINE];
+		      size_t idx = do_read_32_relocated (*ptrp, debug_sec);
 		      if (dest_dir)
 			{
 			  if (record_file_string_entry_idx (line_strp, dso,
@@ -2025,7 +2040,8 @@ read_dwarf5_line_entries (DSO *dso, unsigned char **ptrp,
 	    /* Note we don't expect DW_FORM_strx in the line table.  */
 	    case DW_FORM_strp:
 	    case DW_FORM_line_strp:
-	      edit_strp (dso, form, *ptrp, phase, handled_strp);
+	      edit_strp (dso, form, *ptrp, phase, handled_strp,
+			 &debug_sections[DEBUG_LINE]);
 	      break;
 	    }
 
@@ -2208,10 +2224,11 @@ find_new_list_offs (struct debug_lines *lines, size_t idx)
 /* Read DW_FORM_strp or DW_FORM_line_strp collecting compilation directory.  */
 static void
 edit_attributes_str_comp_dir (uint32_t form, DSO *dso, unsigned char **ptrp,
-			      int phase, char **comp_dirp, bool *handled_strpp)
+			      int phase, char **comp_dirp, bool *handled_strpp,
+			      struct debug_section *debug_sec)
 {
   const char *dir;
-  size_t idx = do_read_str_form_relocated (dso, form, *ptrp);
+  size_t idx = do_read_str_form_relocated (dso, form, *ptrp, debug_sec);
   bool line_strp = form == DW_FORM_line_strp;
   /* In phase zero we collect the comp_dir.  */
   if (phase == 0)
@@ -2245,7 +2262,8 @@ edit_attributes_str_comp_dir (uint32_t form, DSO *dso, unsigned char **ptrp,
    abbrev data is consumed. In phase zero data is collected, in phase one
    data might be replaced/updated.  */
 static unsigned char *
-edit_attributes (DSO *dso, unsigned char *ptr, struct abbrev_tag *t, int phase)
+edit_attributes (DSO *dso, unsigned char *ptr, struct abbrev_tag *t, int phase,
+		 struct debug_section *debug_sec)
 {
   int i;
   uint32_t list_offs;
@@ -2274,13 +2292,13 @@ edit_attributes (DSO *dso, unsigned char *ptr, struct abbrev_tag *t, int phase)
 	      if (form == DW_FORM_data4
 		  || form == DW_FORM_sec_offset)
 		{
-		  list_offs = do_read_32_relocated (ptr);
+		  list_offs = do_read_32_relocated (ptr, debug_sec);
 		  if (phase == 0)
 		    found_list_offs = 1;
 		  else if (need_stmt_update) /* phase one */
 		    {
 		      size_t idx, new_idx;
-		      idx = do_read_32_relocated (ptr);
+		      idx = do_read_32_relocated (ptr, debug_sec);
 		      new_idx = find_new_list_offs (&dso->lines, idx);
 		      do_write_32_relocated (ptr, new_idx);
 		    }
@@ -2352,7 +2370,7 @@ edit_attributes (DSO *dso, unsigned char *ptr, struct abbrev_tag *t, int phase)
 		       || form == DW_FORM_strx4)
 		edit_attributes_str_comp_dir (form, dso,
 					      &ptr, phase, &comp_dir,
-					      &handled_strp);
+					      &handled_strp, debug_sec);
 	    }
 	  else if ((t->tag == DW_TAG_compile_unit
 		    || t->tag == DW_TAG_partial_unit)
@@ -2374,7 +2392,8 @@ edit_attributes (DSO *dso, unsigned char *ptr, struct abbrev_tag *t, int phase)
 		 unit. If starting with / it is a full path name.
 		 Note that we don't handle DW_FORM_string in this
 		 case.  */
-	      size_t idx = do_read_str_form_relocated (dso, form, ptr);
+	      size_t idx = do_read_str_form_relocated (dso, form, ptr,
+						       debug_sec);
 
 	      /* In phase zero we will look for a comp_dir to use.  */
 	      if (phase == 0)
@@ -2427,7 +2446,7 @@ edit_attributes (DSO *dso, unsigned char *ptr, struct abbrev_tag *t, int phase)
 	    case DW_FORM_strx2:
 	    case DW_FORM_strx3:
 	    case DW_FORM_strx4:
-	      edit_strp (dso, form, ptr, phase, handled_strp);
+	      edit_strp (dso, form, ptr, phase, handled_strp, debug_sec);
 	      break;
 	    }
 
@@ -2521,7 +2540,7 @@ edit_info (DSO *dso, int phase, struct debug_section *sec)
   if (ptr == NULL)
     return 0;
 
-  setup_relbuf(dso, sec, &reltype);
+  setup_relbuf(dso, sec);
   endsec = ptr + sec->size;
   while (ptr < endsec)
     {
@@ -2580,7 +2599,7 @@ edit_info (DSO *dso, int phase, struct debug_section *sec)
 	  return 1;
 	}
 
-      value = read_32_relocated (ptr);
+      value = read_32_relocated (ptr, sec);
       if (value >= debug_sections[DEBUG_ABBREV].size)
 	{
 	  if (debug_sections[DEBUG_ABBREV].data == NULL)
@@ -2643,23 +2662,19 @@ edit_info (DSO *dso, int phase, struct debug_section *sec)
 		{
 		  uint32_t form;
 		  unsigned char *fptr = ptr;
-		  // We will read this DIE again, save and reset rel reading
-		  REL *old_relptr = relptr;
 		  for (i = 0; i < t->nattr; ++i)
 		    {
 		      form = t->attr[i].form;
 		      if (t->attr[i].attr == DW_AT_str_offsets_base)
 			{
-			  str_offsets_base = do_read_32_relocated (fptr);
+			  str_offsets_base = do_read_32_relocated (fptr, sec);
 			  break;
 			}
 		      skip_form (dso, &form, &fptr);
 		    }
-		  // Reset the rel reading...
-		  relptr = old_relptr;
 		}
 	    }
-	  ptr = edit_attributes (dso, ptr, t, phase);
+	  ptr = edit_attributes (dso, ptr, t, phase, sec);
 	  if (ptr == NULL)
 	    break;
 	}
@@ -2696,8 +2711,9 @@ edit_dwarf2_any_str (DSO *dso, struct strings *strings, debug_section *secp)
 static void
 update_str_offsets (DSO *dso)
 {
-  unsigned char *ptr = debug_sections[DEBUG_STR_OFFSETS].data;
-  unsigned char *endp = ptr + debug_sections[DEBUG_STR_OFFSETS].size;
+  struct debug_section *str_off_sec = &debug_sections[DEBUG_STR_OFFSETS];
+  unsigned char *ptr = str_off_sec->data;
+  unsigned char *endp = ptr + str_off_sec->size;
 
   while (ptr < endp)
     {
@@ -2719,7 +2735,7 @@ update_str_offsets (DSO *dso)
 	{
 	  struct stridxentry *entry;
 	  size_t idx, new_idx;
-	  idx = do_read_32_relocated (ptr);
+	  idx = do_read_32_relocated (ptr, str_off_sec);
 	  entry = string_find_entry (&dso->debug_str, idx);
 	  new_idx = strent_offset (entry->entry);
 	  write_32_relocated (ptr, new_idx);
@@ -2872,11 +2888,6 @@ edit_dwarf2 (DSO *dso)
 
   unsigned char *ptr, *endsec;
   int phase;
-  bool info_rel_updated = false;
-  bool types_rel_updated = false;
-  bool macro_rel_updated = false;
-  bool line_rel_updated = false;
-
   for (phase = 0; phase < 2; phase++)
     {
       /* If we don't need to update anyhing, skip phase 1. */
@@ -2887,15 +2898,9 @@ edit_dwarf2 (DSO *dso)
 	  && !need_stmt_update)
 	break;
 
-      rel_updated = false;
       if (edit_info (dso, phase, &debug_sections[DEBUG_INFO]))
 	return 1;
 
-      /* Remember whether any .debug_info relocations might need
-	 to be updated. */
-      info_rel_updated = rel_updated;
-
-      rel_updated = false;
       struct debug_section *types_sec = &debug_sections[DEBUG_TYPES];
       while (types_sec != NULL)
 	{
@@ -2903,10 +2908,6 @@ edit_dwarf2 (DSO *dso)
 	    return 1;
 	  types_sec = types_sec->next;
 	}
-
-      /* Remember whether any .debug_types relocations might need
-	 to be updated. */
-      types_rel_updated = rel_updated;
 
       /* We might have to recalculate/rewrite the debug_line
 	 section.  We need to do that before going into phase one
@@ -3032,8 +3033,7 @@ edit_dwarf2 (DSO *dso)
 	  struct debug_section *macro_sec = &debug_sections[DEBUG_MACRO];
 	  while (macro_sec != NULL)
 	    {
-	      setup_relbuf(dso, macro_sec, &reltype);
-	      rel_updated = false;
+	      setup_relbuf(dso, macro_sec);
 
 	      ptr = macro_sec->data;
 	      endsec = ptr + macro_sec->size;
@@ -3069,7 +3069,7 @@ edit_dwarf2 (DSO *dso)
 			  else
 			    {
 			      size_t idx, new_idx;
-			      idx = do_read_32_relocated (ptr);
+			      idx = do_read_32_relocated (ptr, macro_sec);
 			      new_idx = find_new_list_offs (&dso->lines,
 							    idx);
 			      write_32_relocated (ptr, new_idx);
@@ -3099,14 +3099,14 @@ edit_dwarf2 (DSO *dso)
 		      read_uleb128 (ptr);
 		      if (phase == 0)
 			{
-			  size_t idx = read_32_relocated (ptr);
+			  size_t idx = read_32_relocated (ptr, macro_sec);
 			  record_existing_string_entry_idx (false, dso, idx);
 			}
 		      else
 			{
 			  struct stridxentry *entry;
 			  size_t idx, new_idx;
-			  idx = do_read_32_relocated (ptr);
+			  idx = do_read_32_relocated (ptr, macro_sec);
 			  entry = string_find_entry (&dso->debug_str, idx);
 			  new_idx = strent_offset (entry->entry);
 			  write_32_relocated (ptr, new_idx);
@@ -3121,8 +3121,6 @@ edit_dwarf2 (DSO *dso)
 		    }
 		}
 
-	      if (rel_updated)
-		macro_rel_updated = true;
 	      macro_sec = macro_sec->next;
 	    }
 	}
@@ -3130,8 +3128,7 @@ edit_dwarf2 (DSO *dso)
 
       /* Now handle all the DWARF5 line tables, they contain strp
 	 and/or line_strp entries that need to be registered/rewritten.  */
-      setup_relbuf(dso, &debug_sections[DEBUG_LINE], &reltype);
-      rel_updated = false;
+      setup_relbuf(dso, &debug_sections[DEBUG_LINE]);
 
       /* edit_dwarf2_line will have set this up, unless there are no
 	 moved/resized (DWARF4) lines. In which case we can just use
@@ -3146,8 +3143,6 @@ edit_dwarf2 (DSO *dso)
 	  if (t->version >= 5)
 	    read_dwarf5_line (dso, line_buf + t->new_idx, t, phase);
 	}
-      if (rel_updated)
-	line_rel_updated = true;
 
       /* Same for the debug_str and debug_line_str sections.
 	 Make sure everything is in place for phase 1 updating of debug_info
@@ -3174,38 +3169,34 @@ edit_dwarf2 (DSO *dso)
     dirty_section (DEBUG_LINE);
   if (need_strp_update && debug_sections[DEBUG_STR_OFFSETS].data != NULL)
     {
-      setup_relbuf(dso, &debug_sections[DEBUG_STR_OFFSETS], &reltype);
-      rel_updated = false;
+      setup_relbuf(dso, &debug_sections[DEBUG_STR_OFFSETS]);
       update_str_offsets (dso);
       dirty_section (DEBUG_STR_OFFSETS);
-      if (rel_updated)
+      if (debug_sections[DEBUG_STR_OFFSETS].rel_updated)
 	update_rela_data (dso, &debug_sections[DEBUG_STR_OFFSETS]);
     }
 
   /* Update any relocations addends we might have touched. */
-  if (info_rel_updated)
+  if (debug_sections[DEBUG_INFO].rel_updated)
     update_rela_data (dso, &debug_sections[DEBUG_INFO]);
-  if (types_rel_updated)
+
+  struct debug_section *types_sec = &debug_sections[DEBUG_TYPES];
+  while (types_sec != NULL)
     {
-      struct debug_section *types_sec = &debug_sections[DEBUG_TYPES];
-      while (types_sec != NULL)
-	{
-	  update_rela_data (dso, types_sec);
-	  types_sec = types_sec->next;
-	}
+      if (types_sec->rel_updated)
+	update_rela_data (dso, types_sec);
+      types_sec = types_sec->next;
     }
 
-  if (macro_rel_updated)
+  struct debug_section *macro_sec = &debug_sections[DEBUG_MACRO];
+  while (macro_sec != NULL)
     {
-      struct debug_section *macro_sec = &debug_sections[DEBUG_MACRO];
-      while (macro_sec != NULL)
-	{
-	  update_rela_data (dso, macro_sec);
-	  macro_sec = macro_sec->next;
-	}
+      if (macro_sec->rel_updated)
+	update_rela_data (dso, macro_sec);
+      macro_sec = macro_sec->next;
     }
 
-  if (line_rel_updated)
+  if (debug_sections[DEBUG_LINE].rel_updated)
     update_rela_data (dso, &debug_sections[DEBUG_LINE]);
 
   return 0;
