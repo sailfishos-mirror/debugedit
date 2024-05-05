@@ -93,7 +93,10 @@ DEBUGEDIT_SETUP([-gdwarf-4])
 
 # Capture strings that start with the testdir (pwd) directory path
 # (and replace that textually with /foo/bar/baz)
-$READELF -p.debug_str foo.o subdir_bar/bar.o baz.o | cut -c13- \
+($READELF -p.debug_str foo.o; \
+ $READELF -p.debug_str subdir_bar/bar.o; \
+ $READELF -p.debug_str baz.o) \
+	| cut -c13- \
         | grep ^$(pwd) | sort \
         | sed -e "s@$(pwd)@/foo/bar/baz@" > expout
 
@@ -108,7 +111,10 @@ AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foo.o]])
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./subdir_bar/bar.o]])
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./baz.o]])
 AT_CHECK([[
-$READELF -p.debug_str foo.o subdir_bar/bar.o baz.o | cut -c13- \
+($READELF -p.debug_str foo.o; \
+ $READELF -p.debug_str subdir_bar/bar.o; \
+ $READELF -p.debug_str baz.o) \
+	| cut -c13- \
         | grep ^/foo/bar/baz | sort
 ]],[0],[expout])
 
@@ -125,7 +131,9 @@ DEBUGEDIT_SETUP([-gdwarf-5])
 
 # Capture strings that start with the testdir (pwd) directory path
 # (and replace that textually with /foo/bar/baz)
-$READELF -p.debug_str -p.debug_line_str foo.o subdir_bar/bar.o baz.o \
+($READELF -p.debug_str -p.debug_line_str foo.o; \
+ $READELF -p.debug_str -p.debug_line_str subdir_bar/bar.o; \
+ $READELF -p.debug_str -p.debug_line_str baz.o) \
         | cut -c13- \
         | grep ^$(pwd) | sort | uniq \
         | sed -e "s@$(pwd)@/foo/bar/baz@" > expout
@@ -141,7 +149,9 @@ AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foo.o]])
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./subdir_bar/bar.o]])
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./baz.o]])
 AT_CHECK([[
-$READELF -p.debug_str -p.debug_line_str foo.o subdir_bar/bar.o baz.o \
+($READELF -p.debug_str -p.debug_line_str foo.o; \
+ $READELF -p.debug_str -p.debug_line_str subdir_bar/bar.o; \
+ $READELF -p.debug_str -p.debug_line_str baz.o) \
         | cut -c13- \
         | grep ^/foo/bar/baz | sort | uniq
 ]],[0],[expout],[ignore])
@@ -305,7 +315,9 @@ AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foo.o]])
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./subdir_bar/bar.o]])
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./baz.o]])
 AT_CHECK([[
-$READELF --debug-dump=info foo.o subdir_bar/bar.o baz.o \
+($READELF --debug-dump=info foo.o; \
+ $READELF --debug-dump=info subdir_bar/bar.o; \
+ $READELF --debug-dump=info baz.o) \
         | grep -E 'DW_AT_(name|comp_dir)' \
         | rev | cut -d: -f1 | rev | cut -c2- | grep ^/foo/bar/baz | sort -u
 ]],[0],[expout])
@@ -468,7 +480,9 @@ AT_SETUP([debugedit .debug_line objects DWARF4])
 AT_KEYWORDS([debuginfo] [debugedit])
 DEBUGEDIT_SETUP([-gdwarf-4])
 
-$READELF --debug-dump=line foo.o subdir_bar/bar.o baz.o \
+($READELF --debug-dump=line foo.o; \
+ $READELF --debug-dump=line subdir_bar/bar.o; \
+ $READELF --debug-dump=line baz.o) \
         | grep -E -A5 "The (Directory|File Name) Table" \
         | grep "^  [[1234]]" \
         | sed -e "s@$(pwd)@/foo/bar/baz@" | tee expout
@@ -477,7 +491,9 @@ AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foo.o]])
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./subdir_bar/bar.o]])
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./baz.o]])
 AT_CHECK([[
-$READELF --debug-dump=line foo.o subdir_bar/bar.o baz.o \
+($READELF --debug-dump=line foo.o; \
+ $READELF --debug-dump=line subdir_bar/bar.o; \
+ $READELF --debug-dump=line baz.o) \
         | grep -E -A5 "The (Directory|File Name) Table" | grep "^  [1234]"
 ]],[0],[expout])
 
@@ -493,7 +509,9 @@ AT_SKIP_IF([test "$GDWARF_5_FLAG" = "no"])
 AT_SKIP_IF([test "$DWARF_5_DEBUGLINE" = "no"])
 DEBUGEDIT_SETUP([-gdwarf-5])
 
-$READELF --debug-dump=line foo.o subdir_bar/bar.o baz.o \
+($READELF --debug-dump=line foo.o; \
+ $READELF --debug-dump=line subdir_bar/bar.o; \
+ $READELF --debug-dump=line baz.o) \
         | grep -E -A5 "The (Directory|File Name) Table" \
         | grep "^  [[01234]]" | cut -f3 -d: \
         | sed -e "s@$(pwd)@/foo/bar/baz@" | tee expout
@@ -502,7 +520,9 @@ AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foo.o]])
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./subdir_bar/bar.o]])
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./baz.o]])
 AT_CHECK([[
-$READELF --debug-dump=line foo.o subdir_bar/bar.o baz.o \
+($READELF --debug-dump=line foo.o; \
+ $READELF --debug-dump=line subdir_bar/bar.o; \
+ $READELF --debug-dump=line baz.o) \
 	| grep -E -A5 "The (Directory|File Name) Table" \
 	| grep "^  [01234]" | cut -f3 -d:
 ]],[0],[expout])
@@ -620,7 +640,9 @@ AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foo.o]])
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./subdir_bar/bar.o]])
 AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./baz.o]])
 AT_CHECK([[
-$READELF --debug-dump=macro foo.o subdir_bar/bar.o baz.o \
+($READELF --debug-dump=macro foo.o; \
+ $READELF --debug-dump=macro subdir_bar/bar.o; \
+ $READELF --debug-dump=macro baz.o) \
         | grep NUMBER | rev | cut -d: -f1 | rev | cut -c2-
 ]],[0],[expout])
 
