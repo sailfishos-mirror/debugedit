@@ -11,10 +11,12 @@ Makefile.in
 aclocal.m4
 autom4te.*
 config.cache
+config.guess
 config.h
 config.h.in
 config.log
 config.status
+config.sub
 configure
 stamp-h1
 
