@@ -700,6 +700,13 @@ setup_relbuf (DSO *dso, debug_section *sec)
 static void
 update_rela_data (DSO *dso, struct debug_section *sec)
 {
+  if (! sec->rel_updated)
+    {
+      free (sec->relbuf);
+      sec->relbuf = NULL;
+      return;
+    }
+
   Elf_Data *symdata;
   int relsec_ndx = sec->relsec;
   Elf_Data *data = elf_getdata (dso->scn[relsec_ndx], NULL);
@@ -3172,32 +3179,27 @@ edit_dwarf2 (DSO *dso)
       setup_relbuf(dso, &debug_sections[DEBUG_STR_OFFSETS]);
       update_str_offsets (dso);
       dirty_section (DEBUG_STR_OFFSETS);
-      if (debug_sections[DEBUG_STR_OFFSETS].rel_updated)
-	update_rela_data (dso, &debug_sections[DEBUG_STR_OFFSETS]);
+      update_rela_data (dso, &debug_sections[DEBUG_STR_OFFSETS]);
     }
 
   /* Update any relocations addends we might have touched. */
-  if (debug_sections[DEBUG_INFO].rel_updated)
-    update_rela_data (dso, &debug_sections[DEBUG_INFO]);
+  update_rela_data (dso, &debug_sections[DEBUG_INFO]);
 
   struct debug_section *types_sec = &debug_sections[DEBUG_TYPES];
   while (types_sec != NULL)
     {
-      if (types_sec->rel_updated)
-	update_rela_data (dso, types_sec);
+      update_rela_data (dso, types_sec);
       types_sec = types_sec->next;
     }
 
   struct debug_section *macro_sec = &debug_sections[DEBUG_MACRO];
   while (macro_sec != NULL)
     {
-      if (macro_sec->rel_updated)
-	update_rela_data (dso, macro_sec);
+      update_rela_data (dso, macro_sec);
       macro_sec = macro_sec->next;
     }
 
-  if (debug_sections[DEBUG_LINE].rel_updated)
-    update_rela_data (dso, &debug_sections[DEBUG_LINE]);
+  update_rela_data (dso, &debug_sections[DEBUG_LINE]);
 
   return 0;
 }
