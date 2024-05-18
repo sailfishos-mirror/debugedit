@@ -161,6 +161,8 @@ struct strings
 
 struct line_table
 {
+  struct CU *cu;      /* (first) CU that references this table.  */
+
   size_t old_idx;     /* Original offset. */
   size_t new_idx;     /* Offset in new debug_line section. */
   ssize_t size_diff;  /* Difference in (header) size. */
@@ -191,6 +193,16 @@ struct debug_lines
   char *line_buf;           /* New Elf_Data d_buf. */
 };
 
+struct CU
+{
+  int ptr_size;
+  int cu_version;
+  /* The offset into the .debug_str_offsets section for this CU.  */
+  uint32_t str_offsets_base;
+
+  struct CU *next;
+};
+
 typedef struct
 {
   Elf *elf;
@@ -201,6 +213,10 @@ typedef struct
   size_t phnum;
   struct strings debug_str, debug_line_str;
   struct debug_lines lines;
+  /* List of CUs that keeps track of version, ptr_size,
+     str_offsets_base, etc. so other structures, like macros, can use
+     those properties for parsing.  */
+  struct CU *cus;
   GElf_Shdr shdr[0];
 } DSO;
 
@@ -292,6 +308,17 @@ destroy_lines (struct debug_lines *lines)
   free (lines->line_buf);
 }
 
+static void
+destroy_cus (struct CU *cu)
+{
+  while (cu != NULL)
+    {
+      struct CU *next_cu = cu->next;
+      free (cu);
+      cu = next_cu;
+    }
+}
+
 #define read_uleb128(ptr) ({		\
   unsigned int ret = 0;			\
   unsigned int c;			\
@@ -326,12 +353,6 @@ static uint32_t (*do_read_24) (unsigned char *ptr);
 static uint32_t (*do_read_32) (unsigned char *ptr);
 static void (*do_write_16) (unsigned char *ptr, uint16_t val);
 static void (*do_write_32) (unsigned char *ptr, uint32_t val);
-
-static int ptr_size;
-static int cu_version;
-
-/* The offset into the .debug_str_offsets section for the current CU.  */
-static uint32_t str_offsets_base;
 
 static inline uint16_t
 buf_read_ule16 (unsigned char *data)
@@ -751,7 +772,7 @@ do_read_uleb128 (unsigned char *ptr)
 
 static inline uint32_t
 do_read_str_form_relocated (DSO *dso, uint32_t form, unsigned char *ptr,
-			    struct debug_section *sec)
+			    struct debug_section *sec, struct CU *cu)
 {
   uint32_t idx;
   switch (form)
@@ -781,7 +802,7 @@ do_read_str_form_relocated (DSO *dso, uint32_t form, unsigned char *ptr,
     }
 
   unsigned char *str_off_ptr = debug_sections[DEBUG_STR_OFFSETS].data;
-  str_off_ptr += str_offsets_base;
+  str_off_ptr += cu->str_offsets_base;
   str_off_ptr += idx * 4;
 
   struct debug_section *str_offsets_sec = &debug_sections[DEBUG_STR_OFFSETS];
@@ -1301,7 +1322,7 @@ destroy_strings (struct strings *strings)
    outputs a warning if there was a problem reading the table at the
    given offset.  */
 static bool
-get_line_table (DSO *dso, size_t off, struct line_table **table)
+get_line_table (DSO *dso, size_t off, struct line_table **table, struct CU *cu)
 {
   struct debug_lines *lines = &dso->lines;
   /* Assume there aren't that many, just do a linear search.  The
@@ -1336,6 +1357,7 @@ get_line_table (DSO *dso, size_t off, struct line_table **table)
   struct line_table *t = &lines->table[lines->used];
   *table = NULL;
 
+  t->cu = cu;
   t->old_idx = off;
   t->new_idx = off;
   t->size_diff = 0;
@@ -1387,8 +1409,8 @@ get_line_table (DSO *dso, size_t off, struct line_table **table)
   if (t->version >= 5)
     {
       /* address_size */
-      assert (ptr_size != 0);
-      if (ptr_size != read_8 (ptr))
+      assert (cu->ptr_size != 0);
+      if (cu->ptr_size != read_8 (ptr))
 	{
 	  error (0, 0, "%s: .debug_line address size differs from .debug_info",
 		 dso->filename);
@@ -1637,7 +1659,7 @@ edit_dwarf2_line (DSO *dso)
    Also handles DW_FORM_strx, but just for recording the (indexed) string.  */
 static void
 edit_strp (DSO *dso, uint32_t form, unsigned char *ptr, int phase,
-	   bool handled_strp, struct debug_section *sec)
+	   bool handled_strp, struct debug_section *sec, struct CU *cu)
 {
   unsigned char *ptr_orig = ptr;
 
@@ -1651,7 +1673,7 @@ edit_strp (DSO *dso, uint32_t form, unsigned char *ptr, int phase,
 	 recorded. */
       if (! handled_strp)
 	{
-	  size_t idx = do_read_str_form_relocated (dso, form, ptr, sec);
+	  size_t idx = do_read_str_form_relocated (dso, form, ptr, sec, cu);
 	  record_existing_string_entry_idx (form == DW_FORM_line_strp,
 					    dso, idx);
 	}
@@ -1676,15 +1698,15 @@ edit_strp (DSO *dso, uint32_t form, unsigned char *ptr, int phase,
 
 /* Adjust *PTRP after the current *FORMP, update *FORMP for FORM_INDIRECT.  */
 static enum { FORM_OK, FORM_ERROR, FORM_INDIRECT }
-skip_form (DSO *dso, uint32_t *formp, unsigned char **ptrp)
+skip_form (DSO *dso, uint32_t *formp, unsigned char **ptrp, struct CU *cu)
 {
   size_t len = 0;
 
   switch (*formp)
     {
     case DW_FORM_ref_addr:
-      if (cu_version == 2)
-	*ptrp += ptr_size;
+      if (cu->cu_version == 2)
+	*ptrp += cu->ptr_size;
       else
 	*ptrp += 4;
       break;
@@ -1692,7 +1714,7 @@ skip_form (DSO *dso, uint32_t *formp, unsigned char **ptrp)
     case DW_FORM_implicit_const:
       break;
     case DW_FORM_addr:
-      *ptrp += ptr_size;
+      *ptrp += cu->ptr_size;
       break;
     case DW_FORM_ref1:
     case DW_FORM_flag:
@@ -2044,17 +2066,21 @@ read_dwarf5_line_entries (DSO *dso, unsigned char **ptrp,
 
 	  switch (form)
 	    {
-	    /* Note we don't expect DW_FORM_strx in the line table.  */
 	    case DW_FORM_strp:
 	    case DW_FORM_line_strp:
+	    case DW_FORM_strx:
+	    case DW_FORM_strx1:
+	    case DW_FORM_strx2:
+	    case DW_FORM_strx3:
+	    case DW_FORM_strx4:
 	      edit_strp (dso, form, *ptrp, phase, handled_strp,
-			 &debug_sections[DEBUG_LINE]);
+			 &debug_sections[DEBUG_LINE], table->cu);
 	      break;
 	    }
 
 	  if (!handled_form)
 	    {
-	      switch (skip_form (dso, &form, ptrp))
+	      switch (skip_form (dso, &form, ptrp, table->cu))
 		{
 		case FORM_OK:
 		  break;
@@ -2177,12 +2203,12 @@ read_dwarf5_line (DSO *dso, unsigned char *ptr, struct line_table *table,
    adjustments needed in the debug_list data structures. Returns true
    if line_table needs to be rewrite either the dir or file paths. */
 static bool
-read_dwarf2_line (DSO *dso, uint32_t off, char *comp_dir)
+read_dwarf2_line (DSO *dso, uint32_t off, char *comp_dir, struct CU *cu)
 {
   unsigned char *ptr;
   struct line_table *table;
 
-  if (get_line_table (dso, off, &table) == false
+  if (get_line_table (dso, off, &table, cu) == false
       || table == NULL)
     return false;
 
@@ -2232,10 +2258,10 @@ find_new_list_offs (struct debug_lines *lines, size_t idx)
 static void
 edit_attributes_str_comp_dir (uint32_t form, DSO *dso, unsigned char **ptrp,
 			      int phase, char **comp_dirp, bool *handled_strpp,
-			      struct debug_section *debug_sec)
+			      struct debug_section *debug_sec, struct CU *cu)
 {
   const char *dir;
-  size_t idx = do_read_str_form_relocated (dso, form, *ptrp, debug_sec);
+  size_t idx = do_read_str_form_relocated (dso, form, *ptrp, debug_sec, cu);
   bool line_strp = form == DW_FORM_line_strp;
   /* In phase zero we collect the comp_dir.  */
   if (phase == 0)
@@ -2270,7 +2296,7 @@ edit_attributes_str_comp_dir (uint32_t form, DSO *dso, unsigned char **ptrp,
    data might be replaced/updated.  */
 static unsigned char *
 edit_attributes (DSO *dso, unsigned char *ptr, struct abbrev_tag *t, int phase,
-		 struct debug_section *debug_sec)
+		 struct debug_section *debug_sec, struct CU *cu)
 {
   int i;
   uint32_t list_offs;
@@ -2377,7 +2403,7 @@ edit_attributes (DSO *dso, unsigned char *ptr, struct abbrev_tag *t, int phase,
 		       || form == DW_FORM_strx4)
 		edit_attributes_str_comp_dir (form, dso,
 					      &ptr, phase, &comp_dir,
-					      &handled_strp, debug_sec);
+					      &handled_strp, debug_sec, cu);
 	    }
 	  else if ((t->tag == DW_TAG_compile_unit
 		    || t->tag == DW_TAG_partial_unit)
@@ -2400,7 +2426,7 @@ edit_attributes (DSO *dso, unsigned char *ptr, struct abbrev_tag *t, int phase,
 		 Note that we don't handle DW_FORM_string in this
 		 case.  */
 	      size_t idx = do_read_str_form_relocated (dso, form, ptr,
-						       debug_sec);
+						       debug_sec, cu);
 
 	      /* In phase zero we will look for a comp_dir to use.  */
 	      if (phase == 0)
@@ -2453,11 +2479,11 @@ edit_attributes (DSO *dso, unsigned char *ptr, struct abbrev_tag *t, int phase,
 	    case DW_FORM_strx2:
 	    case DW_FORM_strx3:
 	    case DW_FORM_strx4:
-	      edit_strp (dso, form, ptr, phase, handled_strp, debug_sec);
+	      edit_strp (dso, form, ptr, phase, handled_strp, debug_sec, cu);
 	      break;
 	    }
 
-	  switch (skip_form (dso, &form, &ptr))
+	  switch (skip_form (dso, &form, &ptr, cu))
 	    {
 	    case FORM_OK:
 	      break;
@@ -2511,7 +2537,7 @@ edit_attributes (DSO *dso, unsigned char *ptr, struct abbrev_tag *t, int phase,
      separately (at the end of phase zero after all CUs have been
      scanned in dwarf2_edit). */
   if (phase == 0 && found_list_offs
-      && read_dwarf2_line (dso, list_offs, comp_dir))
+      && read_dwarf2_line (dso, list_offs, comp_dir, cu))
     need_stmt_update = true;
 
   free (comp_dir);
@@ -2542,6 +2568,7 @@ edit_info (DSO *dso, int phase, struct debug_section *sec)
   struct abbrev_tag tag, *t;
   int i;
   bool first;
+  struct CU *cu;
 
   ptr = sec->data;
   if (ptr == NULL)
@@ -2551,6 +2578,14 @@ edit_info (DSO *dso, int phase, struct debug_section *sec)
   endsec = ptr + sec->size;
   while (ptr < endsec)
     {
+      cu = malloc (sizeof (struct CU));
+      if (cu == NULL)
+	error (1, errno, "%s: Could not allocate memory for next CU",
+	       dso->filename);
+
+      cu->next = dso->cus;
+      dso->cus = cu;
+
       unsigned char *cu_start = ptr;
 
       /* header size, version, unit_type, ptr_size.  */
@@ -2575,7 +2610,7 @@ edit_info (DSO *dso, int phase, struct debug_section *sec)
 	  return 1;
 	}
 
-      cu_version = read_16 (ptr);
+      int cu_version = read_16 (ptr);
       if (cu_version != 2 && cu_version != 3 && cu_version != 4
 	  && cu_version != 5)
 	{
@@ -2583,6 +2618,7 @@ edit_info (DSO *dso, int phase, struct debug_section *sec)
 		 cu_version);
 	  return 1;
 	}
+      cu->cu_version = cu_version;
 
       int cu_ptr_size = 0;
 
@@ -2620,22 +2656,14 @@ edit_info (DSO *dso, int phase, struct debug_section *sec)
       if (cu_version < 5)
 	cu_ptr_size = read_8 (ptr);
 
-      if (ptr_size == 0)
+      if (cu_ptr_size != 4 && cu_ptr_size != 8)
 	{
-	  ptr_size = cu_ptr_size;
-	  if (ptr_size != 4 && ptr_size != 8)
-	    {
-	      error (0, 0, "%s: Invalid DWARF pointer size %d",
-		     dso->filename, ptr_size);
-	      return 1;
-	    }
-	}
-      else if (cu_ptr_size != ptr_size)
-	{
-	  error (0, 0, "%s: DWARF pointer size differs between CUs",
-		 dso->filename);
+	  error (0, 0, "%s: Invalid DWARF pointer size %d",
+		 dso->filename, cu_ptr_size);
 	  return 1;
 	}
+
+      cu->ptr_size = cu_ptr_size;
 
       if (sec != &debug_sections[DEBUG_INFO])
 	ptr += 12; /* Skip type_signature and type_offset.  */
@@ -2646,7 +2674,6 @@ edit_info (DSO *dso, int phase, struct debug_section *sec)
 	return 1;
 
       first = true;
-      str_offsets_base = 0;
       while (ptr < endcu)
 	{
 	  tag.entry = read_uleb128 (ptr);
@@ -2674,14 +2701,15 @@ edit_info (DSO *dso, int phase, struct debug_section *sec)
 		      form = t->attr[i].form;
 		      if (t->attr[i].attr == DW_AT_str_offsets_base)
 			{
-			  str_offsets_base = do_read_32_relocated (fptr, sec);
+			  cu->str_offsets_base = do_read_32_relocated (fptr,
+								       sec);
 			  break;
 			}
-		      skip_form (dso, &form, &fptr);
+		      skip_form (dso, &form, &fptr, cu);
 		    }
 		}
 	    }
-	  ptr = edit_attributes (dso, ptr, t, phase, sec);
+	  ptr = edit_attributes (dso, ptr, t, phase, sec, cu);
 	  if (ptr == NULL)
 	    break;
 	}
@@ -2764,7 +2792,6 @@ edit_dwarf2 (DSO *dso)
       debug_sections[i].sec = 0;
       debug_sections[i].relsec = 0;
     }
-  ptr_size = 0;
 
   for (i = 1; i < dso->ehdr.e_shnum; ++i)
     if (! (dso->shdr[i].sh_flags & (SHF_ALLOC | SHF_WRITE | SHF_EXECINSTR))
@@ -3346,6 +3373,7 @@ error_out:
       destroy_strings (&dso->debug_str);
       destroy_strings (&dso->debug_line_str);
       destroy_lines (&dso->lines);
+      destroy_cus (dso->cus);
       free (dso);
     }
   if (elf)
@@ -3847,6 +3875,7 @@ main (int argc, char *argv[])
   destroy_strings (&dso->debug_str);
   destroy_strings (&dso->debug_line_str);
   destroy_lines (&dso->lines);
+  destroy_cus (dso->cus);
   free (dso);
 
   /* In case there were multiple (COMDAT) .debug_macro sections,
