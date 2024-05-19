@@ -199,6 +199,8 @@ struct CU
   int cu_version;
   /* The offset into the .debug_str_offsets section for this CU.  */
   uint32_t str_offsets_base;
+  /* The offset into the .debug_macros section for this CU (DW_AT_macros).  */
+  uint32_t macros_offs;
 
   struct CU *next;
 };
@@ -615,13 +617,14 @@ setup_relbuf (DSO *dso, debug_section *sec)
       if (dso->shdr[i].sh_type == SHT_REL && sym.st_value == 0)
 	continue;
       /* Only consider relocations against .debug_str,
-	 .debug_str_offsets, .debug_line, .debug_line_str, and
-	 .debug_abbrev.  */
+	 .debug_str_offsets, .debug_line, .debug_line_str,
+	 .debug_macro and .debug_abbrev.  */
       if (sym.st_shndx == 0 ||
 	  (sym.st_shndx != debug_sections[DEBUG_STR].sec
 	   && sym.st_shndx != debug_sections[DEBUG_STR_OFFSETS].sec
 	   && sym.st_shndx != debug_sections[DEBUG_LINE].sec
 	   && sym.st_shndx != debug_sections[DEBUG_LINE_STR].sec
+	   && sym.st_shndx != debug_sections[DEBUG_MACRO].sec
 	   && sym.st_shndx != debug_sections[DEBUG_ABBREV].sec))
 	continue;
       rela.r_addend += sym.st_value;
@@ -2338,6 +2341,9 @@ edit_attributes (DSO *dso, unsigned char *ptr, struct abbrev_tag *t, int phase,
 		}
 	    }
 
+	  if (t->attr[i].attr == DW_AT_macros)
+	    cu->macros_offs = do_read_32_relocated (ptr, debug_sec);
+
 	  /* DW_AT_comp_dir is the current working directory. */
 	  if (t->attr[i].attr == DW_AT_comp_dir)
 	    {
@@ -2778,6 +2784,20 @@ update_str_offsets (DSO *dso)
     }
 }
 
+static struct CU *
+find_macro_cu (DSO *dso, uint32_t macros_offs)
+{
+  struct CU *cu = dso->cus;
+  while (cu != NULL)
+    {
+      if (cu->macros_offs == macros_offs)
+	return cu;
+      cu = cu->next;
+    }
+
+  return dso->cus; /* Not found, assume first CU.  */
+}
+
 static int
 edit_dwarf2 (DSO *dso)
 {
@@ -3073,11 +3093,13 @@ edit_dwarf2 (DSO *dso)
 	      endsec = ptr + macro_sec->size;
 	      int op = 0, macro_version, macro_flags;
 	      int offset_len = 4, line_offset = 0;
+	      struct CU *cu = NULL;
 
 	      while (ptr < endsec)
 		{
 		  if (!op)
 		    {
+		      cu = find_macro_cu (dso, ptr - macro_sec->data);
 		      macro_version = read_16 (ptr);
 		      macro_flags = read_8 (ptr);
 		      if (macro_version < 4 || macro_version > 5)
@@ -3148,6 +3170,19 @@ edit_dwarf2 (DSO *dso)
 		      break;
 		    case DW_MACRO_GNU_transparent_include:
 		      ptr += offset_len;
+		      break;
+		    case DW_MACRO_define_strx:
+		    case DW_MACRO_undef_strx:
+		      read_uleb128 (ptr);
+		      if (phase == 0)
+			{
+			  size_t idx;
+			  idx = do_read_str_form_relocated (dso, DW_FORM_strx,
+							    ptr, macro_sec,
+							    cu);
+			  record_existing_string_entry_idx (false, dso, idx);
+			}
+		      read_uleb128 (ptr);
 		      break;
 		    default:
 		      error (1, 0, "Unhandled DW_MACRO op 0x%x", op);
