@@ -477,16 +477,20 @@ do_file()
 			      -l "$SOURCEFILE" "$f") || exit
   if [ -z "$id" ]; then
     echo >&2 "*** ${strict_error}: No build ID note found in $f"
-    $strict && exit 2
+    $strict && return 2
   fi
 
   # Add .gdb_index if requested.
   if $include_gdb_index; then
     if type gdb-add-index >/dev/null 2>&1; then
-      gdb-add-index "$f"
+      gdb-add-index "$f" || {
+        status=$?
+        echo >&2 "*** ERROR:: GDB exited with exit status $status during index generation"
+        return 2
+      }
     else
       echo >&2 "*** ERROR: GDB index requested, but no gdb-add-index installed"
-      exit 2
+      return 2
     fi
   fi
 
@@ -547,6 +551,7 @@ run_job()
 {
   local jobid=$1 filenum
   local SOURCEFILE=$temp/debugsources.$jobid ELFBINSFILE=$temp/elfbins.$jobid
+  local res=0
 
   >"$SOURCEFILE"
   >"$ELFBINSFILE"
@@ -558,8 +563,12 @@ run_job()
       break
     fi
     do_file $(sed -n "$(( 0x$filenum )) p" "$temp/primary")
+    res=$?
+    if [ $res != 0 ]; then
+	break
+    fi
   done
-  echo 0 >"$temp/res.$jobid"
+  echo $res >"$temp/res.$jobid"
 }
 
 n_files=$(wc -l <"$temp/primary")
@@ -570,6 +579,10 @@ fi
 if [ $n_jobs -le 1 ]; then
   while read nlinks inum f; do
     do_file "$nlinks" "$inum" "$f"
+    res=$?
+    if [ "$res" != "0" ]; then
+      exit $res
+    fi
   done <"$temp/primary"
 else
   for ((i = 1; i <= n_files; i++)); do
@@ -587,7 +600,7 @@ else
     test -f "$f" || continue
     res=$(< "$f")
     if [ "$res" !=  "0" ]; then
-      exit 1
+      exit $res
     fi
   done
   # List of sources may have lots of duplicates. A kernel build was seen
