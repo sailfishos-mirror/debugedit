@@ -55,7 +55,8 @@ pattern.  Both options can be given more than once.
 The --strict-build-id flag says to exit with failure status if
 any ELF binary processed fails to contain a build-id note.
 
-The -m flag says to include a .gnu_debugdata section in the main binary.
+The -m flag says to include a .gnu_debugdata section (MiniDebugInfo) in
+the main binary.
 
 The -i flag says to include a .gdb_index section in the .debug file.
 
