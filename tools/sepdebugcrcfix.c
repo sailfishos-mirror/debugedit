@@ -27,6 +27,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <endian.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <error.h>
@@ -43,9 +44,6 @@
 #endif
 
 static_assert (sizeof (unsigned long) >= sizeof (uint32_t));
-
-typedef int bool;
-static const bool false = 0, true = 1;
 
 /* This is bfd_calc_gnu_debuglink_crc32 from bfd/opncls.c.  */
 static unsigned long
