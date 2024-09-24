@@ -75,6 +75,7 @@ AC_SYS_LARGEFILE
 PKG_PROG_PKG_CONFIG
 PKG_CHECK_MODULES([LIBELF], [libelf])
 PKG_CHECK_MODULES([LIBDW], [libdw])
+PKG_CHECK_MODULES([XXHASH], [libxxhash >= 0.8.0])
 
 # Checks for header files.
 AC_CHECK_HEADERS([fcntl.h inttypes.h limits.h malloc.h stddef.h stdint.h stdlib.h string.h unistd.h])
