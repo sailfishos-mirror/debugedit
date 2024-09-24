@@ -79,6 +79,9 @@ PKG_CHECK_MODULES([LIBDW], [libdw])
 # Checks for header files.
 AC_CHECK_HEADERS([fcntl.h inttypes.h limits.h malloc.h stddef.h stdint.h stdlib.h string.h unistd.h])
 
+# Checks for xxhash (mandatory, md5/sha1 buildid hashes are removed)
+AC_CHECK_HEADERS([xxhash.h], [], AC_MSG_ERROR([missing xxhash.h]))
+
 # Checks for typedefs, structures, and compiler characteristics.
 AC_CHECK_HEADER_STDBOOL
 AC_C_INLINE

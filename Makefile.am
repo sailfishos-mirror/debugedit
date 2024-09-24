@@ -41,9 +41,7 @@ find-debuginfo: $(top_srcdir)/scripts/find-debuginfo.in Makefile
 	chmod +x "$@"
 
 debugedit_SOURCES = tools/debugedit.c \
-		    tools/hashtab.c \
-		    tools/md5.c \
-		    tools/sha1.c
+		    tools/hashtab.c 
 debugedit_CFLAGS = @LIBELF_CFLAGS@ @LIBDW_CFLAGS@ $(AM_CFLAGS)
 debugedit_LDADD = @LIBELF_LIBS@ @LIBDW_LIBS@
 
@@ -85,8 +83,6 @@ find-debuginfo.1: $(top_srcdir)/scripts/find-debuginfo.in configure.ac find-debu
 	esac
 
 noinst_HEADERS= tools/ansidecl.h \
-		tools/hashtab.h \
-		tools/md5.h \
-		tools/sha1.h
+		tools/hashtab.h
 
 EXTRA_DIST = README COPYING COPYING3 COPYING.LIB scripts/find-debuginfo.in
