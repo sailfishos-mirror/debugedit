@@ -439,12 +439,43 @@ AT_CLEANUP
 
 # ===
 # Make sure -fdebug-types-section has updated strings in executable.
-# Currently only works with DWARF4
+# DWARF4
 # ===
-AT_SETUP([debugedit .debug_types exe])
+AT_SETUP([debugedit .debug_types exe DWARF4])
 AT_KEYWORDS([debugtypes] [debugedit])
 DEBUGEDIT_SETUP([-fdebug-types-section -gdwarf-4])
 AT_SKIP_IF([! $READELF -S ./foobarbaz.exe | grep -F -q '.debug_types'])
+
+AT_DATA([expout],
+[st1
+stb
+stf
+stringp1
+stringp_bar
+stringp_baz
+stringp_foo
+stz
+])
+
+AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foobarbaz.exe]])
+AT_CHECK([[
+$READELF --debug-dump=info ./foobarbaz.exe \
+        | awk '/Abbrev Number:.*DW_TAG_type_unit/{p=1}{if(p)print}/^$/{p=0}' \
+        | sed -n 's/^.*> *DW_AT_name *:.* \(stringp[^ ]*\|st.\)$/\1/p' \
+        | sort
+]],[0],[expout])
+
+AT_CLEANUP
+
+# ===
+# Make sure -fdebug-types-section has updated strings in executable.
+# DWARF5
+# ===
+AT_SETUP([debugedit .debug_types exe DWARF5])
+AT_KEYWORDS([debugtypes] [debugedit])
+DEBUGEDIT_SETUP([-fdebug-types-section -gdwarf-5])
+AT_SKIP_IF([test "$GDWARF_5_FLAG" = "no"])
+AT_SKIP_IF([! $READELF --debug-dump=info ./foobarbaz.exe | grep -F -q 'DW_TAG_type_unit'])
 
 AT_DATA([expout],
 [st1

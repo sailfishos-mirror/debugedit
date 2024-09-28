@@ -2628,10 +2628,13 @@ edit_info (DSO *dso, int phase, struct debug_section *sec)
 
       int cu_ptr_size = 0;
 
+      uint8_t unit_type = DW_UT_compile;
       if (cu_version >= 5)
 	{
-	  uint8_t unit_type = read_8 (ptr);
-	  if (unit_type != DW_UT_compile && unit_type != DW_UT_partial)
+	  unit_type = read_8 (ptr);
+	  if (unit_type != DW_UT_compile
+	      && unit_type != DW_UT_partial
+	      && unit_type != DW_UT_type)
 	    {
 	      error (0, 0, "%s: Unit type %u unhandled", dso->filename,
 		     unit_type);
@@ -2641,7 +2644,12 @@ edit_info (DSO *dso, int phase, struct debug_section *sec)
 	  cu_ptr_size = read_8 (ptr);
 	}
 
-      unsigned char *header_end = (cu_start + 23 + (cu_version < 5 ? 0 : 1));
+      unsigned char *header_end = (cu_start + 23
+				   + (cu_version < 5
+				      ? 0
+				      : (unit_type != DW_UT_type
+					 ? 1 /* unit */
+					 : 1 + 8 + 4))); /* unit, id, off */
       if (header_end > endsec)
 	{
 	  error (0, 0, "%s: %s CU header too small", dso->filename, sec->name);
@@ -2671,7 +2679,7 @@ edit_info (DSO *dso, int phase, struct debug_section *sec)
 
       cu->ptr_size = cu_ptr_size;
 
-      if (sec != &debug_sections[DEBUG_INFO])
+      if (sec != &debug_sections[DEBUG_INFO] || unit_type == DW_UT_type)
 	ptr += 12; /* Skip type_signature and type_offset.  */
 
       abbrev = read_abbrev (dso,
