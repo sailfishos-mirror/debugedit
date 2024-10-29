@@ -168,7 +168,7 @@ AC_SUBST([DEBUG_MACRO_FLAG])
 # It is difficult to do a feature check for this, so just do a version check.
 READELF_STRING=$($READELF --version | head -1)
 # The double [[ and ]] is because of configure.ac being an m4 script.
-READELF_REGEXP='s/GNU readelf[[a-zA-Z() _-]]*\([[1-9]]\)\.\([[0-9]]*\).*/\1\2/'
+READELF_REGEXP='s/GNU readelf[[a-zA-Z0-9(); _-]]*\([[1-9]]\)\.\([[0-9]]*\).*/\1\2/'
 READELF_VER=$(echo "$READELF_STRING" | sed -e "$READELF_REGEXP")
 AC_CACHE_CHECK([readelf version for compress tests], ac_cv_readelf_ver, [dnl
 ac_cv_readelf_ver="$READELF_VER"
