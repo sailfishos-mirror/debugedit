@@ -162,6 +162,25 @@ else
 fi
 AC_SUBST([DEBUG_MACRO_FLAG])
 
+# We really need binutils readelf version 2.31 or higher
+# Older versions don't cope correctly with compressed debug sections
+# https://sourceware.org/bugzilla/show_bug.cgi?id=23919
+# It is difficult to do a feature check for this, so just do a version check.
+READELF_STRING=$($READELF --version | head -1)
+# The double [[ and ]] is because of configure.ac being an m4 script.
+READELF_REGEXP='s/GNU readelf[[a-zA-Z() _-]]*\([[1-9]]\)\.\([[0-9]]*\).*/\1\2/'
+READELF_VER=$(echo "$READELF_STRING" | sed -e "$READELF_REGEXP")
+AC_CACHE_CHECK([readelf version for compress tests], ac_cv_readelf_ver, [dnl
+ac_cv_readelf_ver="$READELF_VER"
+])
+if test "$READELF_VER" -ge "231"; then
+  READELF_VERSION_OK="yes"
+else
+  AC_MSG_WARN([$READELF_STRING ($READELF_VER) cannot do compression tests])
+  READELF_VERSION_OK="no"
+fi
+AC_SUBST([READELF_VERSION_OK])
+
 # And generate the output files.
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

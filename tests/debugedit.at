@@ -97,6 +97,7 @@ AT_CLEANUP
 AT_SETUP([debugedit executable (compressed)])
 AT_KEYWORDS([debuginfo] [debugedit])
 AT_SKIP_IF([test -z "$GZ_ZLIB_FLAG"])
+AT_SKIP_IF([test "$READELF_VERSION_OK" = "no"])
 DEBUGEDIT_SETUP([], [$GZ_ZLIB_FLAG])
 
 AT_CHECK([[./foobarbaz.exe]])
@@ -349,6 +350,7 @@ AT_CLEANUP
 AT_SETUP([debugedit .debug_info objects (compressed)])
 AT_KEYWORDS([debuginfo] [debugedit])
 AT_SKIP_IF([test -z "$GZ_ZLIB_FLAG"])
+AT_SKIP_IF([test "$READELF_VERSION_OK" = "no"])
 DEBUGEDIT_SETUP([], [$GZ_ZLIB_FLAG])
 
 AT_DATA([expout],
@@ -396,6 +398,7 @@ AT_CLEANUP
 AT_SETUP([debugedit .debug_info partial (compressed)])
 AT_KEYWORDS([debuginfo] [debugedit])
 AT_SKIP_IF([test -z "$GZ_ZLIB_FLAG"])
+AT_SKIP_IF([test "$READELF_VERSION_OK" = "no"])
 DEBUGEDIT_SETUP([], [$GZ_ZLIB_FLAG])
 
 AT_DATA([expout],
@@ -438,6 +441,7 @@ AT_CLEANUP
 AT_SETUP([debugedit .debug_info exe (compressed)])
 AT_KEYWORDS([debuginfo] [debugedit])
 AT_SKIP_IF([test -z "$GZ_ZLIB_FLAG"])
+AT_SKIP_IF([test "$READELF_VERSION_OK" = "no"])
 DEBUGEDIT_SETUP([], [$GZ_ZLIB_FLAG])
 
 AT_DATA([expout],
@@ -813,6 +817,7 @@ AT_CLEANUP
 AT_SETUP([debugedit .debug_macro exe (compressed)])
 AT_KEYWORDS([debuginfo] [debugedit])
 AT_SKIP_IF([test -z "$GZ_ZLIB_FLAG"])
+AT_SKIP_IF([test "$READELF_VERSION_OK" = "no"])
 DEBUGEDIT_SETUP([$DEBUG_MACRO_FLAG], [$GZ_ZLIB_FLAG])
 
 # We expect 3 for each compile unit.
