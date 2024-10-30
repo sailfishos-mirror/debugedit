@@ -905,13 +905,13 @@ AT_CHECK([[test "$bid" != "$bid2a"]])
 AT_CHECK([[$READELF -n main | grep Build.ID: | awk '{print $3}']], [0], [stdout], [ignore])
 bid2b="`cat stdout`"
 AT_CHECK([[expr "$bid2b" : '[0-9a-f]*']], [0], [ignore])
-AT_CHECK([[test "$bid2a" == "$bid2b"]])
+AT_CHECK([[test "$bid2a" = "$bid2b"]])
 
 # run debugedit to recompute build-id, check for idempotence
 AT_CHECK([[debugedit -i -s deadbeef main]], [0], [stdout])
 bid2c="`cat stdout`"
 AT_CHECK([[expr "$bid2c" : '[0-9a-f]*']], [0], [ignore])
-AT_CHECK([[test "$bid2a" == "$bid2c"]])
+AT_CHECK([[test "$bid2a" = "$bid2c"]])
 
 # check that debugedit -i with different -s seed results in different valid build-id
 AT_CHECK([[debugedit -i -s zoofoo main]], [0], [stdout])
