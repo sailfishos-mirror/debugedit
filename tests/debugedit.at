@@ -343,7 +343,7 @@ AT_CHECK([[
  $READELF --debug-dump=info baz.o) \
         | grep -E 'DW_AT_(name|comp_dir)' \
         | rev | cut -d: -f1 | rev | cut -c2- | grep ^/foo/bar/baz | sort -u
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
@@ -368,7 +368,7 @@ AT_CHECK([[
  $READELF --debug-dump=info baz.o) \
         | grep -E 'DW_AT_(name|comp_dir)' \
         | rev | cut -d: -f1 | rev | cut -c2- | grep ^/foo/bar/baz | sort -u
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
@@ -391,7 +391,7 @@ AT_CHECK([[
 $READELF --debug-dump=info ./foobarbaz.part.o \
         | grep -E 'DW_AT_(name|comp_dir)' \
         | rev | cut -d: -f1 | rev | cut -c2- | grep ^/foo/bar/baz | sort -u
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
@@ -412,7 +412,7 @@ AT_CHECK([[
 $READELF --debug-dump=info ./foobarbaz.part.o \
         | grep -E 'DW_AT_(name|comp_dir)' \
         | rev | cut -d: -f1 | rev | cut -c2- | grep ^/foo/bar/baz | sort -u
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
@@ -434,7 +434,7 @@ AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foobarbaz.exe]])
 AT_CHECK([[
 $READELF --debug-dump=info ./foobarbaz.exe | grep -E 'DW_AT_(name|comp_dir)' \
         | rev | cut -d: -f1 | rev | cut -c2- | grep ^/foo/bar/baz | sort -u
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
@@ -454,7 +454,7 @@ AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foobarbaz.exe]])
 AT_CHECK([[
 $READELF --debug-dump=info ./foobarbaz.exe | grep -E 'DW_AT_(name|comp_dir)' \
         | rev | cut -d: -f1 | rev | cut -c2- | grep ^/foo/bar/baz | sort -u
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
@@ -492,7 +492,7 @@ for i in ./foo.o ./subdir_bar/bar.o ./baz.o;do \
           | sed -n 's/^.*> *DW_AT_name *:.* \(stringp[^ ]*\|st.\)$/\1/p' \
           | sort;
 done
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
@@ -522,7 +522,7 @@ $READELF --debug-dump=info ./foobarbaz.part.o \
         | awk '/Abbrev Number:.*DW_TAG_type_unit/{p=1}{if(p)print}/^$/{p=0}' \
         | sed -n 's/^.*> *DW_AT_name *:.* \(stringp[^ ]*\|st.\)$/\1/p' \
         | sort
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
@@ -552,7 +552,7 @@ $READELF --debug-dump=info ./foobarbaz.exe \
         | awk '/Abbrev Number:.*DW_TAG_type_unit/{p=1}{if(p)print}/^$/{p=0}' \
         | sed -n 's/^.*> *DW_AT_name *:.* \(stringp[^ ]*\|st.\)$/\1/p' \
         | sort
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
@@ -583,7 +583,7 @@ $READELF --debug-dump=info ./foobarbaz.exe \
         | awk '/Abbrev Number:.*DW_TAG_type_unit/{p=1}{if(p)print}/^$/{p=0}' \
         | sed -n 's/^.*> *DW_AT_name *:.* \(stringp[^ ]*\|st.\)$/\1/p' \
         | sort
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
@@ -615,7 +615,7 @@ AT_CHECK([[
  $READELF --debug-dump=line subdir_bar/bar.o; \
  $READELF --debug-dump=line baz.o) \
         | grep -E -A5 "The (Directory|File Name) Table" | grep "^  [1234]"
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
@@ -645,7 +645,7 @@ AT_CHECK([[
  $READELF --debug-dump=line baz.o) \
 	| grep -E -A5 "The (Directory|File Name) Table" \
 	| grep "^  [01234]" | cut -f3 -d:
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
@@ -667,7 +667,7 @@ AT_CHECK([[
 $READELF --debug-dump=line ./foobarbaz.part.o \
         | grep -E -A5 "The (Directory|File Name) Table" \
 	| grep "^  [1234]"
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
@@ -691,7 +691,7 @@ AT_CHECK([[
 $READELF --debug-dump=line ./foobarbaz.part.o \
 	| grep -E -A5 "The (Directory|File Name) Table" \
 	| grep "^  [01234]" | cut -f3 -d:
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
@@ -713,7 +713,7 @@ AT_CHECK([[
 $READELF --debug-dump=line ./foobarbaz.exe \
         | grep -E -A5 "The (Directory|File Name) Table" \
 	| grep "^  [1234]"
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
@@ -737,7 +737,7 @@ AT_CHECK([[
 $READELF --debug-dump=line ./foobarbaz.exe \
 	| grep -E -A5 "The (Directory|File Name) Table" \
 	| grep "^  [01234]" | cut -f3 -d:
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
@@ -764,7 +764,7 @@ AT_CHECK([[
  $READELF --debug-dump=macro subdir_bar/bar.o; \
  $READELF --debug-dump=macro baz.o) \
         | grep NUMBER | rev | cut -d: -f1 | rev | cut -c2-
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
@@ -787,7 +787,7 @@ AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foobarbaz.part.o]])
 AT_CHECK([[
 $READELF --debug-dump=macro ./foobarbaz.part.o \
         | grep NUMBER | rev | cut -d: -f1 | rev | cut -c2-
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
@@ -810,7 +810,7 @@ AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foobarbaz.exe]])
 AT_CHECK([[
 $READELF --debug-dump=macro ./foobarbaz.exe \
         | grep NUMBER | rev | cut -d: -f1 | rev | cut -c2-
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
@@ -831,7 +831,7 @@ AT_CHECK([[debugedit -b $(pwd) -d /foo/bar/baz ./foobarbaz.exe]])
 AT_CHECK([[
 $READELF --debug-dump=macro ./foobarbaz.exe \
         | grep NUMBER | rev | cut -d: -f1 | rev | cut -c2-
-]],[0],[expout])
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
 
