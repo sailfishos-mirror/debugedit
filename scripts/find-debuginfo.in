@@ -550,7 +550,7 @@ do_file()
       application/x-executable*) skip_mini=false ;;
       application/x-pie-executable*) skip_mini=false ;;
     esac
-    if test "$skip_mini" = "true"; then
+    if test "$skip_mini" = "false"; then
       if test "$f_writable" = "false"; then
         chmod u+w "$f"
       fi
