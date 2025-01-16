@@ -434,6 +434,7 @@ trap 'rm -rf "$temp"' EXIT
 
 # Build a list of unstripped ELF files and their hardlinks
 touch "$temp/primary"
+touch "$temp/linked"
 find "$RPM_BUILD_ROOT" ! -path "${debugdir}/*.debug" -type f \
      		     \( -perm -0100 -or -perm -0010 -or -perm -0001 \) \
 		     -print | LC_ALL=C sort |
@@ -458,7 +459,7 @@ do_file()
   local nlinks=$1 inum=$2 f=$3 id link linked
 
   get_debugfn "$f"
-  [ -f "${debugfn}" ] && return
+  [ -f "${debugfn}" ] && return 0
 
   $verbose && echo "extracting debug info from $f"
   # See also cpio SOURCEFILE copy. Directories must match up.
@@ -475,7 +476,7 @@ do_file()
   id=$(debugedit -b "$debug_base_name" -d "$debug_dest_name" \
 			      $no_recompute -i \
 			      ${build_id_seed:+--build-id-seed="$build_id_seed"} \
-			      -l "$SOURCEFILE" "$f") || exit
+			      -l "$SOURCEFILE" "$f") || return 1
   if [ -z "$id" ]; then
     echo >&2 "*** ${strict_error}: No build ID note found in $f"
     $strict && return 2
@@ -524,7 +525,7 @@ do_file()
   # just has its file names collected and adjusted.
   case "$dn" in
   /usr/lib/debug/*)
-    return ;;
+    return 0 ;;
   esac
 
   mkdir -p "${debugdn}"
@@ -573,6 +574,8 @@ do_file()
       mkdir -p "$(dirname "$debugfn")" && ln -nf "$link" "$debugfn"
     done
   fi
+
+  return 0
 }
 
 # 16^6 - 1 or about 16 million files
