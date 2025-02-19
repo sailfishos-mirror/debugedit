@@ -82,7 +82,6 @@ typedef struct Ebl_Strtab	Strtab;
 
 #include "tools/hashtab.h"
 
-#define XXH_INLINE_ALL
 #include "xxhash.h"
 
 #define DW_TAG_partial_unit 0x3c

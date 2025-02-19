@@ -42,8 +42,8 @@ find-debuginfo: $(top_srcdir)/scripts/find-debuginfo.in Makefile
 
 debugedit_SOURCES = tools/debugedit.c \
 		    tools/hashtab.c 
-debugedit_CFLAGS = @LIBELF_CFLAGS@ @LIBDW_CFLAGS@ $(AM_CFLAGS)
-debugedit_LDADD = @LIBELF_LIBS@ @LIBDW_LIBS@
+debugedit_CFLAGS = @LIBELF_CFLAGS@ @LIBDW_CFLAGS@ @XXHASH_CFLAGS@ $(AM_CFLAGS)
+debugedit_LDADD = @LIBELF_LIBS@ @LIBDW_LIBS@ @XXHASH_LIBS@
 
 sepdebugcrcfix_SOURCES = tools/sepdebugcrcfix.c
 sepdebugcrcfix_CFLAGS = @LIBELF_CFLAGS@ $(AM_CFLAGS)

@@ -181,6 +181,17 @@ else
 fi
 AC_SUBST([READELF_VERSION_OK])
 
+ENABLE_INLINED_XXHASH=yes
+AC_ARG_ENABLE(inlined-xxhash,
+	AS_HELP_STRING([--disable-inlined-xxhash], [disable the inlined-only version of xxhash library]),
+	ENABLE_INLINED_XXHASH=$enableval,
+	ENABLE_INLINED_XXHASH=yes)
+
+if test x$ENABLE_INLINED_XXHASH = xyes; then
+	XXHASH_CFLAGS="$XXHASH_CFLAGS -DXXH_INLINE_ALL"
+	XXHASH_LIBS=""
+fi
+
 # And generate the output files.
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
