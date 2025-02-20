@@ -45,6 +45,8 @@ m4_version_prereq([2.70], [AC_PROG_CC], [AC_PROG_CC_C99])
 AC_PROG_LN_S
 AC_CHECK_TOOL([LD], [ld])
 AC_CHECK_TOOL([READELF], [readelf])
+AC_CHECK_TOOL([OBJCOPY], [objcopy])
+AC_CHECK_TOOL([NM], [nm])
 AM_MISSING_PROG(HELP2MAN, help2man)
 
 # Whether dwz support -j.

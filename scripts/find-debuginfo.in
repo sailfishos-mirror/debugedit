@@ -108,6 +108,14 @@ EOF
 install_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PATH=${install_dir}:$PATH
 
+# A couple of binutils helper tools are used in this script.
+# Let the user override them by setting them in environment variables.
+# The default is the (target variant) of the tool found when debugedit
+# was configured.
+READELF=${READELF:=@READELF@}
+OBJCOPY=${OBJCOPY:=@OBJCOPY@}
+NM=${NM:=@NM@}
+
 # With -g arg, pass it to strip on libraries or executables.
 strip_g=false
 
@@ -360,7 +368,7 @@ add_minidebug()
   # symbol and NOBITS sections so cannot use --keep-only because that is
   # too aggressive. Field $2 is the section name, $3 is the section type
   # and $8 are the section flags.
-  local remove_sections=`@READELF@ -W -S "$debuginfo" \
+  local remove_sections=`${READELF} -W -S "$debuginfo" \
 	| awk '{ if (index($2,".debug_") != 1 \
 		     && ($3 == "PROGBITS" || $3 == "NOTE" || $3 == "NOBITS") \
 		     && index($8,"A") == 0) \
@@ -368,20 +376,20 @@ add_minidebug()
 
   # Extract the dynamic symbols from the main binary, there is no need to also have these
   # in the normal symbol table
-  nm -D "$binary" --format=posix --defined-only | awk '{ print $1 }' | sort > "$dynsyms"
+  ${NM} -D "$binary" --format=posix --defined-only | awk '{ print $1 }' | sort > "$dynsyms"
   # Extract all the text (i.e. function) symbols from the debuginfo
   # Use format sysv to make sure we can match against the actual ELF FUNC
   # symbol type. The binutils nm posix format symbol type chars are
   # ambigous for architectures that might use function descriptors.
-  nm "$debuginfo" --format=sysv --defined-only | awk -F \| '{ if ($4 ~ "FUNC") print $1 }' | sort > "$funcsyms"
+  ${NM} "$debuginfo" --format=sysv --defined-only | awk -F \| '{ if ($4 ~ "FUNC") print $1 }' | sort > "$funcsyms"
   # Keep all the function symbols not already in the dynamic symbol table
   comm -13 "$dynsyms" "$funcsyms" > "$keep_symbols"
   # Copy the full debuginfo, keeping only a minumal set of symbols and removing some unnecessary sections
-  objcopy -S $remove_sections --keep-symbols="$keep_symbols" "$debuginfo" "$mini_debuginfo" &> /dev/null
+  ${OBJCOPY} -S $remove_sections --keep-symbols="$keep_symbols" "$debuginfo" "$mini_debuginfo" &> /dev/null
   #Inject the compressed data into the .gnu_debugdata section of the original binary
   xz "$mini_debuginfo"
   mini_debuginfo="${mini_debuginfo}.xz"
-  objcopy --add-section .gnu_debugdata="$mini_debuginfo" "$binary"
+  ${OBJCOPY} --add-section .gnu_debugdata="$mini_debuginfo" "$binary"
   rm -f "$dynsyms" "$funcsyms" "$keep_symbols" "$mini_debuginfo"
 }
 
@@ -516,7 +524,7 @@ do_file()
   if test "$f_writable" = "false"; then
     chmod u+w "$f"
   fi
-  objcopy --merge-notes "$f" 2>/dev/null || true
+  ${OBJCOPY} --merge-notes "$f" 2>/dev/null || true
   if test "$f_writable" = "false"; then
     chmod u-w "$f"
   fi
