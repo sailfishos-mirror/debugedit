@@ -5,6 +5,7 @@
 # for inclusion in package file lists.
 
 # Copyright (C) 2002-2021 rpm and debugedit contributors
+# Copyright (C) 2025 Red Hat Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -28,7 +29,7 @@ automagically generates debug info and file lists
 Options:
 [--strict-build-id] [-g] [-r] [-m] [-i] [-n] [-q] [-v]
 [--keep-section SECTION] [--remove-section SECTION]
-[--g-libs]
+[--g-libs] [--no-ar-files]
 [-j N] [--jobs N]
 [-o debugfiles.list]
 [-S debugsourcefiles.list]
@@ -95,6 +96,11 @@ will be called /usr/debug/src/<BASE>.  This makes sure the debug source
 dirs are unique between package version, release and achitecture (Use
 --unique-debug-src-base "%{name}-%{VERSION}-%{RELEASE}.%{_arch}")
 
+If --no-ar-files is given, then static libraries will be ignored.  Otherwise,
+they receive only with source-path rewriting and collection.  They are
+not stripped, since they have no persistent build-ids to accommodate
+eventual reunification.
+
 The -q or --quiet flag silences all non-error output from the script.
 The -v or --verbose flag add more output for all files processed.
 When neither -q or -v is given then only output for each pass is given.
@@ -115,6 +121,7 @@ PATH=${install_dir}:$PATH
 READELF=${READELF:=@READELF@}
 OBJCOPY=${OBJCOPY:=@OBJCOPY@}
 NM=${NM:=@NM@}
+AR=${AR:=@AR@}
 
 # With -g arg, pass it to strip on libraries or executables.
 strip_g=false
@@ -166,6 +173,14 @@ quiet=false
 
 # add more non-error output
 verbose=false
+
+# process static libraries if ar is new enough (binutils 2.31+) to support O
+if [ -n "`ar 2>&1 | grep -F '[O]'`" ]; then
+    process_ar=true
+else
+    process_ar=false
+fi
+
 
 BUILDDIR=.
 out=debugfiles.list
@@ -259,6 +274,9 @@ while [ $# -gt 0 ]; do
   -S)
     srcout=$2
     shift
+    ;;
+  --no-ar-files)
+    process_ar=false
     ;;
   -q|--quiet)
     quiet=true
@@ -443,11 +461,19 @@ trap 'rm -rf "$temp"' EXIT
 # Build a list of unstripped ELF files and their hardlinks
 touch "$temp/primary"
 touch "$temp/linked"
-find "$RPM_BUILD_ROOT" ! -path "${debugdir}/*.debug" -type f \
-     		     \( -perm -0100 -or -perm -0010 -or -perm -0001 \) \
-		     -print | LC_ALL=C sort |
-file -N -f - | sed -n -e 's/^\(.*\):[ 	]*.*ELF.*, not stripped.*/\1/p' |
-xargs --no-run-if-empty stat -c '%h %D_%i %n' |
+(
+    find "$RPM_BUILD_ROOT" ! -path "${debugdir}/*.debug" -type f \( -perm -0100 -or -perm -0010 -or -perm -0001 \) -print |
+        file -N -f - |
+        sed -n -e 's/^\(.*\):[     ]*.*ELF.*, not stripped.*/\1/p';
+
+    # plus static libraries
+    $process_ar && find "$RPM_BUILD_ROOT" -type f -name '*.a' -print |
+            file -N -f - |
+            sed -n -e 's/^\(.*\):[         ]*current ar archive.*/\1/p';
+    true
+) |
+    env LC_ALL=C sort |
+    xargs --no-run-if-empty stat -c '%h %D_%i %n' |
 while read nlinks inum f; do
   if [ $nlinks -gt 1 ]; then
     var=seen_$inum
@@ -461,13 +487,122 @@ while read nlinks inum f; do
   echo "$nlinks $inum $f" >>"$temp/primary"
 done
 
+
+# Handle ELF archives
+do_ar_file()
+{
+  local nlinks="$1" inum="$2" f="$3" id link linked
+  local tmpa="$temp/$inum-output.a"
+  local res=0
+
+  # See also cpio SOURCEFILE copy. Directories must match up.
+  debug_base_name="$RPM_BUILD_DIR"
+  debug_dest_name="/usr/src/debug"
+  if [ ! -z "$unique_debug_src_base" ]; then
+      debug_base_name="$BUILDDIR"
+      debug_dest_name="/usr/src/debug/${unique_debug_src_base}"
+  fi
+
+  $verbose && echo "processing debug info in $f"
+  
+  # Extract members from archive, one at a time.  There may be
+  # duplicate names, so we can't just extract the entire archive in
+  # one go (overwriting each other).  Instead, we pick off member
+  # files one-by-one, into synthetic subdirectories, adding processed
+  # versions to a new archive, in order.
+
+  # Create empty output .a; mktemp would create a 0-byte file, which ar rv doesn't like
+  ${AR} r "$tmpa" # no members
+  
+  ${AR} tvO "$f" | while read line; do
+      local pattern='^[rwx-]+ [0-9]+/[0-9]+ +([0-9]+) (.................) (.*) (0x[0-9a-f]+)$'
+      if [[ $line =~ $pattern ]]; then
+          local size=${BASH_REMATCH[1]}
+          local date=${BASH_REMATCH[2]}
+          local member=${BASH_REMATCH[3]}
+          local offset
+          (( offset=${BASH_REMATCH[4]} )) # convert from hexadecimal
+          $verbose && echo "considering ${f#$RPM_BUILD_DIR/} ${member} size ${size} at ${offset}"
+          local tmpdir="$temp/$inum-archive-member" # super short lived
+          local member_dn=$(dirname "$member")
+          if [ "$member_dn" = "." ]; then
+              member_dn="" # empty
+          else
+              member_dn="${member_dn}/" # or suffixed with /
+          fi
+          local member_bn=$(basename "$member")
+
+          # (re)create a directory to hold the (pathname-inclusive) member
+          mkdir -p "$tmpdir/$member_dn"
+          
+          # extract the file by offset, because extracting it by name
+          # is hard, in case the same name exists multiple times.  A
+          # distinct instance-number would have to be given to ar ("N ###"),
+          # kept on a per-name basis.
+          (cd "$tmpdir"; dd status=none if="$f" of="$member_dn$member_bn" bs=1 skip="$offset" count="$size")
+          if [ $? -ne 0 ]; then
+              res=1
+          fi
+          # preserve timestamp from original file, though debugedit may lose it, PR33096
+          touch -d "$date" "$tmpdir/$member_dn$member_bn"
+
+          if file "$tmpdir/$member_dn$member_bn" |
+                  grep -qE 'ELF.*, not stripped'; then
+              debugedit -b "$debug_base_name" -d "$debug_dest_name" \
+		        -l "$SOURCEFILE" "$tmpdir/$member_dn$member_bn"
+              if [ $? -ne 0 ]; then
+                  res=1
+                  $verbose && echo "failed processing ELF object ${member}"
+              else
+                  $verbose && echo "processed ELF object ${member}"
+              fi
+          else
+              $verbose && echo "skipped ${member}, no debuginfo"
+          fi
+
+          # add the file; qP mode, so strict append, no dupe elimination, path preserved
+          (cd "$tmpdir"; ${AR} qP "$tmpa"  "$member_dn$member_bn")
+
+          # remove the entire temporary directory, in case another
+          # member object comes later with a conflicting name
+          rm -rf  "$tmpdir"
+      else
+          $verbose && echo "skipping archive $f with unparseable contents"
+          res=1
+      fi
+  done
+  if [ $res -eq 0 ]; then
+      # replace original archive with new version
+      ${AR} sP "$tmpa" # ranlib, preserve paths
+      mv "$tmpa" "$f"
+  fi
+  rm -f "$tmpa"
+  
+  $verbose && echo found $(tr -dc '\0' < "$SOURCEFILE" | wc -c) source files
+
+  # NB: no need to strip or dwz-compress or gdbindex or
+  # ELFBINSFILE-collect objects / archives.  These operations only
+  # make sense on the final binaries that the static archives are
+  # linked into.
+
+  return $res
+}
+
+
 # Strip ELF binaries
 do_file()
 {
   local nlinks=$1 inum=$2 f=$3 id link linked
 
+  # reject files already located under /usr/lib/debug, presumably processed
   get_debugfn "$f"
   [ -f "${debugfn}" ] && return 0
+
+  local ar_re="^.*\.a$"
+  if [[ $f =~ $ar_re ]]; then # treat as static archive
+      do_ar_file "$1" "$2" "$3"
+      return
+  fi
 
   $verbose && echo "extracting debug info from $f"
   # See also cpio SOURCEFILE copy. Directories must match up.
@@ -490,6 +625,8 @@ do_file()
     $strict && return 2
   fi
 
+  $verbose && echo found $(tr -dc '\0' < "$SOURCEFILE" | wc -c) source files
+  
   # debugedit makes sure to to get write permission to the file and
   # restores original state after modifications. Other utilities
   # might not.
@@ -835,3 +972,4 @@ if ((nout > 0)); then
 fi
 
 $quiet || echo "find-debuginfo: done" 2>&1
+exit 0
