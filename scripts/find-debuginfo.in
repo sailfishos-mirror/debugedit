@@ -4,7 +4,7 @@
 # find-debuginfo - automagically generate debug info and file list
 # for inclusion in package file lists.
 
-# Copyright (C) 2002-2021 rpm and debugedit contributors
+# Copyright (C) 2002-2025 rpm and debugedit contributors
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@ automagically generates debug info and file lists
 Options:
 [--strict-build-id] [-g] [-r] [-m] [-i] [-n] [-q] [-v]
 [--keep-section SECTION] [--remove-section SECTION]
-[--g-libs]
+[--g-libs] [-a]
 [-j N] [--jobs N]
 [-o debugfiles.list]
 [-S debugsourcefiles.list]
@@ -94,6 +94,11 @@ If --unique-debug-src-base BASE is given then the source directory
 will be called /usr/debug/src/<BASE>.  This makes sure the debug source
 dirs are unique between package version, release and achitecture (Use
 --unique-debug-src-base "%{name}-%{VERSION}-%{RELEASE}.%{_arch}")
+
+If -a is given, then static libraries will be ignored.  Otherwise,
+they receive only with source-path rewriting and collection.  They are
+not stripped, since they have no persistent build-ids to accommodate
+eventual reunification.
 
 The -q or --quiet flag silences all non-error output from the script.
 The -v or --verbose flag add more output for all files processed.
@@ -166,6 +171,9 @@ quiet=false
 
 # add more non-error output
 verbose=false
+
+# process static libraries
+process_ar=true
 
 BUILDDIR=.
 out=debugfiles.list
@@ -259,6 +267,9 @@ while [ $# -gt 0 ]; do
   -S)
     srcout=$2
     shift
+    ;;
+  -a)
+    process_ar=false
     ;;
   -q|--quiet)
     quiet=true
@@ -443,10 +454,14 @@ trap 'rm -rf "$temp"' EXIT
 # Build a list of unstripped ELF files and their hardlinks
 touch "$temp/primary"
 touch "$temp/linked"
-find "$RPM_BUILD_ROOT" ! -path "${debugdir}/*.debug" -type f \
-     		     \( -perm -0100 -or -perm -0010 -or -perm -0001 \) \
-		     -print | LC_ALL=C sort |
-file -N -f - | sed -n -e 's/^\(.*\):[ 	]*.*ELF.*, not stripped.*/\1/p' |
+(find "$RPM_BUILD_ROOT" ! -path "${debugdir}/*.debug" -type f \
+      \( -perm -0100 -or -perm -0010 -or -perm -0001 \) \
+      -print | 
+     file -N -f - | sed -n -e 's/^\(.*\):[     ]*.*ELF.*, not stripped.*/\1/p';
+ # plus static libraries
+ $process_ar && find "$RPM_BUILD_ROOT" -type f -name '*.a' -print |
+         file -N -f - | sed -n -e 's/^\(.*\):[         ]*current ar archive.*/\1/p'
+) | LC_ALL=C sort |
 xargs --no-run-if-empty stat -c '%h %D_%i %n' |
 while read nlinks inum f; do
   if [ $nlinks -gt 1 ]; then
@@ -461,10 +476,53 @@ while read nlinks inum f; do
   echo "$nlinks $inum $f" >>"$temp/primary"
 done
 
+
+# Handle ELF archives
+do_ar_file()
+{
+  local nlinks=$1 inum=$2 f=$3 id link linked
+
+  artemp="$temp/ar.$inum"
+  mkdir -p "$artemp"
+  (cd "$artemp"; ar x "$f")
+
+  # See also cpio SOURCEFILE copy. Directories must match up.
+  debug_base_name="$RPM_BUILD_DIR"
+  debug_dest_name="/usr/src/debug"
+  if [ ! -z "$unique_debug_src_base" ]; then
+    debug_base_name="$BUILDDIR"
+    debug_dest_name="/usr/src/debug/${unique_debug_src_base}"
+  fi
+
+  find "$artemp" -type f -type f -print | file -N -f - |
+      sed -n -e 's/^\(.*\):[ 	]*.*ELF.*, not stripped.*/\1/p' |
+      while read objfile; do
+          $verbose && echo "processing ${f#$RPM_BUILD_DIR/} ${objfile#$artemp/}"
+          # nb: debugedit -l writes to $SOURCEFILES in O_APPEND mode, so can be reused.
+          debugedit -b "$debug_base_name" -d "$debug_dest_name" \
+		    -l "$SOURCEFILE" "$objfile"
+          # replace old object with new in archive, nb: relative path names
+          (cd "$artemp"; ar r "$f" ${objfile#$artemp/}) 
+      done
+
+  $verbose && echo found $(tr -dc '\0' < "$SOURCEFILE" | wc -c) source files
+
+  # NB: no need to strip or dwz-compress or gdbindex or
+  # ELFBINSFILE-collect objects / archives.  These operations only
+  # make sense on the final binaries that the static archives are
+  # linked into.
+}
+
+
 # Strip ELF binaries
 do_file()
 {
   local nlinks=$1 inum=$2 f=$3 id link linked
+
+  if expr "$f" : "^.*\.a$" >/dev/null; then # treat as static archive
+      do_ar_file "$1" "$2" "$3"
+      return
+  fi
 
   get_debugfn "$f"
   [ -f "${debugfn}" ] && return 0
