@@ -32,7 +32,8 @@ $(srcdir)/package.m4: $(top_srcdir)/configure.ac
 # The tests
 TESTSUITE_AT = \
   testsuite.at \
-  debugedit.at
+  debugedit.at \
+  find-debuginfo.at
 
 # Some source files that are needed by the tests
 EXTRA_DIST += data/SOURCES/foo.c \
