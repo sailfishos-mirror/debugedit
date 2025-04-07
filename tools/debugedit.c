@@ -144,6 +144,15 @@ struct stridxentry
   Strent *entry; /* Entry in the new table. */
 };
 
+/* Turns out we do need at least one replacement string when there are
+   strings that are never used in any of the debug sections, but that
+   turn up in the .debug_str_offsets. In that case (which really
+   shouldn't occur because it means the DWARF producer added unused
+   strings to the string table) we (warn and) replace the entry with
+   "<debugedit>".  Call create_dummy_debugedit_stridxentry to add the
+   actual string.  */
+static struct stridxentry debugedit_stridxentry = { 0, NULL };
+
 /* Storage for new string table entries. Keep together in memory to
    quickly search through them with tsearch. */
 #define STRIDXENTRIES ((16 * 1024) / sizeof (struct stridxentry))
@@ -157,6 +166,7 @@ struct strentblock
 struct strings
 {
   Strtab *str_tab;			/* The new string table. */
+  Elf_Data orig_data;			/* Original Elf_Data. */
   char *str_buf;			/* New Elf_Data d_buf. */
   struct strmemblock *blocks;		/* The first strmemblock. */
   struct strmemblock *last_block;	/* The currently used strmemblock. */
@@ -1119,6 +1129,32 @@ new_string_storage (struct strings *strings, size_t size)
   return &strings->last_block->memory[stridx];
 }
 
+static void
+create_dummy_debugedit_stridxentry (DSO *dso)
+{
+  if (debugedit_stridxentry.entry != NULL)
+    {
+      fprintf (stderr, "debugedit: "
+	       "create_dummy_debugedit_stridxentry called more than once.");
+      exit (-1);
+    }
+
+  const char *dummy_name = "<debugedit>"; /* Kilroy was here  */
+  const size_t dummy_size = strlen (dummy_name) + 1;
+
+  Strent *strent;
+  char* dummy_str = new_string_storage (&dso->debug_str, dummy_size);
+  if (dummy_str == NULL)
+    error (1, ENOMEM, "Couldn't allocate new string storage");
+  memcpy (dummy_str, dummy_name, dummy_size);
+  strent = strtab_add_len (dso->debug_str.str_tab, dummy_str, dummy_size);
+  if (strent == NULL)
+    error (1, ENOMEM, "Could not create new string table entry");
+
+  debugedit_stridxentry.idx = (uint32_t) -1;
+  debugedit_stridxentry.entry = strent;
+}
+
 /* Comparison function used for tsearch. */
 static int
 strent_compare (const void *a, const void *b)
@@ -1189,12 +1225,14 @@ string_find_new_entry (struct strings *strings, size_t old_idx)
 }
 
 static struct stridxentry *
-string_find_entry (struct strings *strings, size_t old_idx)
+string_find_entry (struct strings *strings, size_t old_idx, bool accept_missing)
 {
   struct stridxentry **ret;
   struct stridxentry key;
   key.idx = old_idx;
   ret = tfind (&key, &strings->strent_root, strent_compare);
+  if (accept_missing && ret == NULL)
+    return &debugedit_stridxentry;
   assert (ret != NULL); /* Can only happen for a bad/non-existing old_idx. */
   return *ret;
 }
@@ -1291,12 +1329,29 @@ static void
 setup_strings (struct strings *strings)
 {
   strings->str_tab = strtab_init (false);
+  /* call update_strings to fill this in.  */
+  memset (&strings->orig_data, 0, sizeof (strings->orig_data));
   strings->str_buf = NULL;
   strings->blocks = NULL;
   strings->last_block = NULL;
   strings->entries = NULL;
   strings->last_entries = NULL;
   strings->strent_root = NULL;
+}
+
+static void
+update_strings (struct strings *strings, struct debug_section *sec)
+{
+  if (sec->elf_data != NULL)
+    strings->orig_data = *sec->elf_data;
+}
+
+static const char *
+orig_str (struct strings *strings, size_t idx)
+{
+  if (idx < strings->orig_data.d_size)
+    return (const char *) strings->orig_data.d_buf + idx;
+  return "<invalid>";
 }
 
 /* Noop for tdestroy. */
@@ -1707,7 +1762,7 @@ edit_strp (DSO *dso, uint32_t form, unsigned char *ptr, int phase,
       struct strings *strings = (form == DW_FORM_line_strp
 				 ? &dso->debug_line_str : &dso->debug_str);
       idx = do_read_32_relocated (ptr, sec);
-      entry = string_find_entry (strings, idx);
+      entry = string_find_entry (strings, idx, false);
       new_idx = strent_offset (entry->entry);
       do_write_32_relocated (ptr, new_idx);
     }
@@ -2791,6 +2846,7 @@ update_str_offsets (DSO *dso)
   while (ptr < endp)
     {
       /* Read header, unit_length, version and padding.  */
+      unsigned char *index_start = ptr;
       if (endp - ptr < 3 * 4)
 	break;
       uint32_t unit_length = read_32 (ptr);
@@ -2803,13 +2859,21 @@ update_str_offsets (DSO *dso)
       uint32_t padding = read_16 (ptr);
       if (padding != 0)
 	break;
+      unsigned char *offstart = ptr;
 
       while (ptr < endidxp)
 	{
 	  struct stridxentry *entry;
 	  size_t idx, new_idx;
 	  idx = do_read_32_relocated (ptr, str_off_sec);
-	  entry = string_find_entry (&dso->debug_str, idx);
+	  entry = string_find_entry (&dso->debug_str, idx, true);
+	  if (entry == &debugedit_stridxentry)
+	    error (0, 0, "Warning, .debug_str_offsets table at offset %zx "
+		   "index [%zd] .debug_str [%zx] entry '%s' unused, "
+		   "replacing with '<debugedit>'\n",
+		   (index_start - str_off_sec->data),
+		   (ptr - offstart) / sizeof (uint32_t), idx,
+		   orig_str (&dso->debug_str, idx));
 	  new_idx = strent_offset (entry->entry);
 	  write_32_relocated (ptr, new_idx);
 	}
@@ -2962,6 +3026,9 @@ edit_dwarf2 (DSO *dso)
 		}
 	  }
       }
+
+  update_strings (&dso->debug_str, &debug_sections[DEBUG_STR]);
+  update_strings (&dso->debug_line_str, &debug_sections[DEBUG_LINE_STR]);
 
   if (dso->ehdr.e_ident[EI_DATA] == ELFDATA2LSB)
     {
@@ -3211,7 +3278,8 @@ edit_dwarf2 (DSO *dso)
 			  struct stridxentry *entry;
 			  size_t idx, new_idx;
 			  idx = do_read_32_relocated (ptr, macro_sec);
-			  entry = string_find_entry (&dso->debug_str, idx);
+			  entry = string_find_entry (&dso->debug_str, idx,
+						     false);
 			  new_idx = strent_offset (entry->entry);
 			  write_32_relocated (ptr, new_idx);
 			}
@@ -3265,8 +3333,17 @@ edit_dwarf2 (DSO *dso)
 	 Make sure everything is in place for phase 1 updating of debug_info
 	 references. */
       if (phase == 0 && need_strp_update)
-	edit_dwarf2_any_str (dso, &dso->debug_str,
-			     &debug_sections[DEBUG_STR]);
+	{
+	  /* We might need a dummy .debug_str entry for
+	     .debug_str_offsets entries of unused strings. We have to
+	     add it unconditionally when there is a .debug_str_offsets
+	     section because we don't know if there are any such
+	     entries.  */
+	  if (debug_sections[DEBUG_STR_OFFSETS].data != NULL)
+	    create_dummy_debugedit_stridxentry (dso);
+	  edit_dwarf2_any_str (dso, &dso->debug_str,
+			       &debug_sections[DEBUG_STR]);
+	}
       if (phase == 0 && need_line_strp_update)
 	edit_dwarf2_any_str (dso, &dso->debug_line_str,
 			     &debug_sections[DEBUG_LINE_STR]);
