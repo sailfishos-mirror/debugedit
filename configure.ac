@@ -126,6 +126,19 @@ CFLAGS="$save_CFLAGS"
 DWARF_5_DEBUGLINE=$ac_cv_dwarf_5_debugline
 AC_SUBST([DWARF_5_DEBUGLINE])
 
+AC_CACHE_CHECK([whether -gdwarf-5 produced DWARF5 .debug_addr], ac_cv_dwarf_5_debugaddr, [dnl
+save_CFLAGS="$CFLAGS"
+CFLAGS="-gdwarf-5"
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([[int i=0;]],[[/* empty main */]])],
+  [if $READELF -S conftest.o 2>&1 | grep -F ".debug_addr" > /dev/null 2>&1; \
+     then ac_cv_dwarf_5_debugaddr=yes; \
+     else ac_cv_dwarf_5_debugaddr=no; fi],
+  ac_cv_dwarf_5_debugaddr=no)
+CFLAGS="$save_CFLAGS"
+])
+DWARF_5_DEBUGADDR=$ac_cv_dwarf_5_debugaddr
+AC_SUBST([DWARF_5_DEBUGADDR])
+
 AC_CACHE_CHECK([whether gcc supports -gz=none], ac_cv_gz_none, [dnl
 save_CFLAGS="$CFLAGS"
 CFLAGS="-gz=none"
