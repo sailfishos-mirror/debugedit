@@ -1,0 +1,83 @@
+# debugedit.at: Tests for the find-debuginfo tool
+#
+# Copyright (C) 2025 Red Hat Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, see see <http://www.gnu.org/licenses/>.
+
+# Recommended usage for verbose logging to the console:
+# make check TESTSUITEFLAGS=-v
+
+AT_BANNER([find-debuginfo])
+AT_TESTED([find-debuginfo])
+
+m4_define([BUILDO],[[
+mkdir -p "$1"
+cp "${abs_srcdir}"/data/SOURCES/dupe.c "$1"
+$CC $CFLAGS -g3 -c "`pwd`/$1/dupe.c" -DFOO=$2 -o "$1/dupe.o"
+echo built "$1/dupe.o"
+]])
+
+
+AT_SETUP([find-debuginfo help])
+AT_KEYWORDS([find-debuginfo] [find-debuginfo])
+AT_CHECK([find-debuginfo --help],[0],[ignore],[ignore])
+AT_CLEANUP
+
+
+AT_SETUP([find-debuginfo on .a])
+# skip if ar too old to support O, needed for all the .a tests below
+AT_SKIP_IF([ test -z "`ar 2>&1 | grep -F '[O]'`" ])
+# build a little .a
+export HOME=${PWD}
+BUILDO([subdir_foob],[foo])
+touch -t 197001010101 subdir_foob/dupe.o # set distinct timestamps
+BUILDO([subdir_barb],[bar])
+touch -t 197001020101 subdir_barb/dupe.o
+BUILDO([subdir_zo b],[jam])
+touch -t 197001030101 subdir_zo?b/dupe.o
+BUILDO([subdir_club],[pix])
+touch -t 197001040101 subdir_club/dupe.o
+mkdir -p subdir_build
+$AR rv subdir_build/dupes.a subdir_foob/dupe.o subdir_barb/dupe.o # without P, these duplicate members "/dupe.o"
+$AR qP subdir_build/dupes.a subdir_zo?b/dupe.o subdir_club/dupe.o # with P, these are subdirectoried members
+# NB: find-debuginfo can't handle file names with embedded whitespace, PR32862; find | xargs used here and there
+
+# list old .a contents
+AT_CHECK([$AR tPv subdir_build/dupes.a],[0],[stdout],[ignore])
+AT_CHECK([test `wc -l < stdout` -eq 4],[0],[ignore],[ignore])
+
+# expect original source tree refs
+AT_CHECK([$READELF --debug-dump=line subdir_build/dupes.a | grep `pwd`], [0], [stdout], [ignore])
+
+# (which is not everpresent)
+AT_TESTED([find-debuginfo])
+
+# run conversion, under bash -x tracing for fuller testing log
+AT_CHECK([[env RPM_BUILD_DIR=${PWD} RPM_BUILD_ROOT=${PWD} RPM_PACKAGE_NAME=pkg RPM_PACKAGE_VERSION=ver RPM_PACKAGE_RELEASE=rel RPM_ARCH=arch \
+               bash -x `type -p find-debuginfo` -S sourcefiles.list -v ${PWD}/subdir_build]], [0], [stdout], [ignore])
+
+# list new .a contents; ar tPv contains timestamps / subdirs, so not a good fit for AT_DATA() here
+AT_CHECK([$AR tPv subdir_build/dupes.a],[0],[stdout],[ignore])
+AT_CHECK([test `wc -l < stdout` -eq 4],[0],[ignore],[ignore])
+
+# expect non-empty source file list
+AT_CHECK([grep . ${PWD}/subdir_build/sourcefiles.list | tr '\0' '\n'], [0], [stdout], [ignore])
+
+# expect proper source tree
+AT_CHECK([$READELF --debug-dump=line subdir_build/dupes.a | grep /usr/src/debug], [0], [stdout], [ignore])
+
+# no traces of old source tree
+AT_CHECK([$READELF --debug-dump=line subdir_build/dupes.a | grep `pwd`], [1], [stdout], [stderr])
+
+AT_CLEANUP

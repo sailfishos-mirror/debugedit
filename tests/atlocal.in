@@ -8,6 +8,7 @@ PATH=@abs_builddir@:@abs_top_builddir@:$top_srcdir:$srcdir:$PATH
 CC="@CC@"
 CFLAGS=""
 LD="@LD@"
+AR="@AR@"
 LDFLAGS=""
 READELF="@READELF@"
 READELF_VERSION_OK="@READELF_VERSION_OK@"

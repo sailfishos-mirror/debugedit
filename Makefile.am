@@ -36,6 +36,7 @@ do_subst = ($(SED) -e 's,[@]PACKAGE[@],$(PACKAGE),g' \
 		   -e 's,[@]READELF[@],$(READELF),g' \
 		   -e 's,[@]OBJCOPY[@],$(OBJCOPY),g' \
 		   -e 's,[@]NM[@],$(NM),g' \
+		   -e 's,[@]AR[@],$(AR),g' \
 		   -e 's,[@]DWZ_J[@],$(DWZ_J),g')
 
 find-debuginfo: $(top_srcdir)/scripts/find-debuginfo.in Makefile

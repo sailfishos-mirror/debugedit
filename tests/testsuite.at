@@ -8,5 +8,5 @@ m4_define([AT_SKIP_TEST],[exit 77])
 AT_INIT
 
 AT_TESTED([debugedit])
-
 m4_include([debugedit.at])
+m4_include([find-debuginfo.at])
