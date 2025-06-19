@@ -543,12 +543,12 @@ do_ar_file()
           if [ $? -ne 0 ]; then
               res=1
           fi
-          # preserve timestamp from original file, though debugedit may lose it, PR33096
+          # preserve timestamp from original file and invoke debugedit with -p
           touch -d "$date" "$tmpdir/$member_dn$member_bn"
 
           if file "$tmpdir/$member_dn$member_bn" |
                   grep -qE 'ELF.*, not stripped'; then
-              debugedit -b "$debug_base_name" -d "$debug_dest_name" \
+              debugedit -p -b "$debug_base_name" -d "$debug_dest_name" \
 		        -l "$SOURCEFILE" "$tmpdir/$member_dn$member_bn"
               if [ $? -ne 0 ]; then
                   res=1

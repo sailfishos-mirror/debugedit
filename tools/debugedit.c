@@ -1,5 +1,5 @@
 /* Copyright (C) 2001-2003, 2005, 2007, 2009-2011, 2016, 2017 Red Hat, Inc.
-   Copyright (C) 2022, 2023, 2024 Mark J. Wielaard <mark@klomp.org>
+   Copyright (C) 2022, 2023, 2024, 2025 Mark J. Wielaard <mark@klomp.org>
    Written by Alexander Larsson <alexl@redhat.com>, 2002
    Based on code by Jakub Jelinek <jakub@redhat.com>, 2001.
    String/Line table rewriting by Mark Wielaard <mjw@redhat.com>, 2017.
@@ -96,6 +96,7 @@ char *list_file = NULL;
 int list_file_fd = -1;
 int do_build_id = 0;
 int no_recompute_build_id = 0;
+bool preserve_dates = false;
 char *build_id_seed = NULL;
 
 int show_version = 0;
@@ -3399,13 +3400,14 @@ static struct option optionsTable[] =
     { "build-id", no_argument, 0, 'i' },
     { "build-id-seed", required_argument, 0, 's' },
     { "no-recompute-build-id", no_argument, 0, 'n' },
+    { "preserve-dates", no_argument, 0, 'p' },
     { "version", no_argument, 0, 'V' },
     { "help", no_argument, 0, '?' },
     { "usage", no_argument, 0, 'u' },
     { NULL, 0, 0, 0 }
   };
 
-static const char *optionsChars = "b:d:l:is:nV?u";
+static const char *optionsChars = "b:d:l:is:npV?u";
 
 static const char *helpText =
   "Usage: %s [OPTION...] FILE\n"
@@ -3419,6 +3421,7 @@ static const char *helpText =
   "                                  this string as hash seed\n"
   "  -n, --no-recompute-build-id     do not recompute build ID note even\n"
   "                                  when -i or -s are given\n"
+  "  -p, --preserve-dates            Preserve modified/access timestamps\n"
   "\n"
   "Help options:\n"
   "  -?, --help                      Show this help message\n"
@@ -3429,7 +3432,9 @@ static const char *usageText =
   "Usage: %s [-in?] [-b|--base-dir STRING] [-d|--dest-dir STRING]\n"
   "        [-l|--list-file STRING] [-i|--build-id] \n"
   "        [-s|--build-id-seed STRING]\n"
-  "        [-n|--no-recompute-build-id] [-?|--help] [-u|--usage]\n"
+  "        [-n|--no-recompute-build-id]\n"
+  "        [-p|--preserve-dates]\n"
+  "        [-?|--help] [-u|--usage]\n"
   "        [-V|--version] FILE\n";
 
 static void
@@ -3718,6 +3723,10 @@ main (int argc, char *argv[])
 
 	case 'n':
 	  no_recompute_build_id = 1;
+	  break;
+
+	case 'p':
+	  preserve_dates = true;
 	  break;
 
 	case 'V':
@@ -4045,6 +4054,16 @@ main (int argc, char *argv[])
   /* Restore old access rights */
   if (chmod (file, stat_buf.st_mode) != 0)
     error (0, errno, "Failed to chmod input file '%s' to restore old access rights", file);
+
+  /* Preserve timestamps.  */
+  if (preserve_dates)
+    {
+      struct timespec tv[2];
+      tv[0] = stat_buf.st_atim;
+      tv[1] = stat_buf.st_mtim;
+      if (utimensat (AT_FDCWD, file, tv, 0) != 0)
+	error (0, errno, "Failed to preserve timestamps on '%s'", file);
+    }
 
   free ((char *) dso->filename);
   destroy_strings (&dso->debug_str);

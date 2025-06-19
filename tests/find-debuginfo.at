@@ -61,6 +61,8 @@ $AR qP subdir_build/dupes.a subdir_zo?b/dupe.o subdir_club/dupe.o # with P, thes
 # list old .a contents
 AT_CHECK([$AR tPv subdir_build/dupes.a],[0],[stdout],[ignore])
 AT_CHECK([test `wc -l < stdout` -eq 4],[0],[ignore],[ignore])
+# Select just the modes, date and entry names (see check after debugedit below)
+awk '{print $1, $4, $5, $6, $7, $8, $9}' < stdout > expout
 
 # expect original source tree refs
 AT_CHECK([$READELF --debug-dump=line subdir_build/dupes.a | grep `pwd`], [0], [stdout], [ignore])
@@ -69,9 +71,9 @@ AT_CHECK([$READELF --debug-dump=line subdir_build/dupes.a | grep `pwd`], [0], [s
 AT_CHECK([[env RPM_BUILD_DIR=${PWD} RPM_BUILD_ROOT=${PWD} RPM_PACKAGE_NAME=pkg RPM_PACKAGE_VERSION=ver RPM_PACKAGE_RELEASE=rel RPM_ARCH=arch \
                bash -x `type -p find-debuginfo` -S sourcefiles.list -v ${PWD}/subdir_build]], [0], [stdout], [ignore])
 
-# list new .a contents; ar tPv contains timestamps / subdirs, so not a good fit for AT_DATA() here
-AT_CHECK([$AR tPv subdir_build/dupes.a],[0],[stdout],[ignore])
-AT_CHECK([test `wc -l < stdout` -eq 4],[0],[ignore],[ignore])
+# list new .a contents; expout generated from original (see above)
+# Only check modes, timestamp and archive entry names
+AT_CHECK([$AR tPv subdir_build/dupes.a | awk '{print $1, $4, $5, $6, $7, $8, $9}'],[0],[expout],[ignore])
 
 # expect non-empty source file list
 AT_CHECK([grep . ${PWD}/subdir_build/sourcefiles.list | tr '\0' '\n'], [0], [stdout], [ignore])
