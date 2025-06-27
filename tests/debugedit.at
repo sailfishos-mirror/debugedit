@@ -891,7 +891,7 @@ AT_KEYWORDS([debuginfo] [debugedit] [build-id])
 # compile a test program and extract its linker-assigned build-id
 echo "int main () { }" > main.c
 $CC $CFLAGS -Wl,--build-id -o main main.c
-AT_CHECK([[$READELF -n main | grep Build.ID: | awk '{print $3}']], [0], [stdout], [ignore])
+AT_CHECK([[$READELF -n main | grep -o "Build.ID:.*" | awk '{print $3}']], [0], [stdout], [ignore])
 bid="`cat stdout`"
 AT_CHECK([[expr "$bid" : '[0-9a-f]*']], [0], [ignore])
 
@@ -902,7 +902,7 @@ AT_CHECK([[expr "$bid2a" : '[0-9a-f]*']], [0], [ignore])
 AT_CHECK([[test "$bid" != "$bid2a"]])
 
 # check that debugedit's stdout matches readelf -n note
-AT_CHECK([[$READELF -n main | grep Build.ID: | awk '{print $3}']], [0], [stdout], [ignore])
+AT_CHECK([[$READELF -n main | grep -o "Build.ID:.*" | awk '{print $3}']], [0], [stdout], [ignore])
 bid2b="`cat stdout`"
 AT_CHECK([[expr "$bid2b" : '[0-9a-f]*']], [0], [ignore])
 AT_CHECK([[test "$bid2a" = "$bid2b"]])
