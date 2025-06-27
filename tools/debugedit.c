@@ -714,6 +714,16 @@ setup_relbuf (DSO *dso, debug_section *sec)
       goto fail;
     break;
 #endif
+#ifndef EM_AMDGPU
+#define EM_AMDGPU 224
+#endif
+#ifndef R_AMDGPU_ABS32
+#define R_AMDGPU_ABS32 6
+#endif
+	case EM_AMDGPU:
+	  if (rtype != R_AMDGPU_ABS32)
+	    goto fail;
+	  break;
 	default:
 	fail:
 	  error (1, 0, "%s: Unhandled relocation %d at [%d] for %s section",
