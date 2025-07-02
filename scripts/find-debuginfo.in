@@ -512,7 +512,7 @@ do_ar_file()
   # versions to a new archive, in order.
 
   # Create empty output .a; mktemp would create a 0-byte file, which ar rv doesn't like
-  ${AR} r "$tmpa" # no members
+  ${AR} r "$tmpa" 2>/dev/null # no members, suppress "ar: creating foo.a" message
   
   ${AR} tvO "$f" | while read line; do
       local pattern='^[rwx-]+ [0-9]+/[0-9]+ +([0-9]+) (.................) (.*) (0x[0-9a-f]+)$'
