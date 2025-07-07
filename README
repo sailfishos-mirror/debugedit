@@ -12,8 +12,7 @@ The project home is https://sourceware.org/debugedit/
 
 RELEASES and CODE
 
-Releases are published at ftp://sourceware.org/pub/debugedit/
-Which can also be found at https://sourceware.org/debugedit/ftp/
+Releases are published at https://sourceware.org/pub/debugedit/
 
 To build a release do:
   ./configure && make && make check
