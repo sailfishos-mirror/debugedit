@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-# Copyright (C) 2021, 2024 Mark J. Wielaard <mark@klomp.org>
+# Copyright (C) 2021, 2024, 2025 Mark J. Wielaard <mark@klomp.org>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 AC_PREREQ([2.69])
-AC_INIT([debugedit], [5.1], [debugedit@sourceware.org])
+AC_INIT([debugedit], [5.2], [debugedit@sourceware.org])
 AC_CONFIG_SRCDIR([tools/debugedit.c])
 AC_CONFIG_HEADERS([config.h])
 
