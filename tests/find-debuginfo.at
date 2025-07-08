@@ -93,9 +93,9 @@ cp "${abs_srcdir}"/data/SOURCES/baz.c subdir_build
 cd subdir_build
 # Three almost identical binaries
 # so dwz has something to put into the alt file
-$CC $CFLAGS -g3 -I. -o foo foo.c bar.c baz.c
-$CC $CFLAGS -g3 -I. -o bar bar.c baz.c foo.c
-$CC $CFLAGS -g3 -I. -o baz baz.c foo.c bar.c
+$CC $CFLAGS -Wl,--build-id -g3 -I. -o foo foo.c bar.c baz.c
+$CC $CFLAGS -Wl,--build-id -g3 -I. -o bar bar.c baz.c foo.c
+$CC $CFLAGS -Wl,--build-id -g3 -I. -o baz baz.c foo.c bar.c
 cd ..
 ]])
 
