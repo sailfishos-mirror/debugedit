@@ -67,7 +67,7 @@ AT_CHECK([$READELF --debug-dump=line subdir_build/dupes.a | grep `pwd`], [0], [s
 
 # run conversion, under bash -x tracing for fuller testing log
 AT_CHECK([[env RPM_BUILD_DIR=${PWD} RPM_BUILD_ROOT=${PWD} RPM_PACKAGE_NAME=pkg RPM_PACKAGE_VERSION=ver RPM_PACKAGE_RELEASE=rel RPM_ARCH=arch \
-               bash -x `type -p find-debuginfo` -S sourcefiles.list -v ${PWD}/subdir_build]], [0], [stdout], [ignore])
+               bash -x `command -v find-debuginfo` -S sourcefiles.list -v ${PWD}/subdir_build]], [0], [stdout], [ignore])
 
 # list new .a contents; ar tPv contains timestamps / subdirs, so not a good fit for AT_DATA() here
 AT_CHECK([$AR tPv subdir_build/dupes.a],[0],[stdout],[ignore])
