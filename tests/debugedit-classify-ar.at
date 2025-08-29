@@ -1,0 +1,89 @@
+# debugedit-classify-ar.at: Tests for the debugedit-classify-ar tool
+#
+# Copyright (C) 2025 Mark J. Wielaard <mark@klomp.org>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, see see <http://www.gnu.org/licenses/>.
+
+# Tests for tools/debugedit-classify-ar
+AT_BANNER([debugedit-classify-ar])
+
+# Show which debugedit-classify-ar tool we are testing
+AT_TESTED([debugedit-classify-ar])
+
+# Check debugedit-classify-ar --help doesn't crash and burn
+AT_SETUP([debugedit-classify-ar help])
+AT_KEYWORDS([debugedit-classify-ar] [help])
+AT_CHECK([debugedit-classify-ar --help],[0],[ignore],[ignore])
+AT_CLEANUP
+
+# Check rejection of none ar file
+AT_SETUP([debugedit-classify-ar not and archive])
+AT_KEYWORDS([debugedit-classify-ar] [not-an-ar])
+echo "not an ar file" > not-an-ar-file.a
+AT_CHECK([debugedit-classify-ar -v ./not-an-ar-file.a],[1],[],
+[debugedit-classify-ar: not an ELF archive: ./not-an-ar-file.a
+])
+AT_CLEANUP
+
+# Check empty ar file
+AT_SETUP([debugedit-classify-ar empty archive])
+AT_KEYWORDS([debugedit-classify-ar] [empty-ar])
+${AR} r empty.a
+AT_CHECK([debugedit-classify-ar -v ./empty.a],[1],[],
+[debugedit-classify-ar: no member with debug sections: ./empty.a
+])
+AT_CLEANUP
+
+# Check ar file with not ELF member
+AT_SETUP([debugedit-classify-ar not ELF member])
+AT_KEYWORDS([debugedit-classify-ar] [not-elf-member])
+echo "Not an ELF" > not-elf
+${AR} qS not-elf.a not-elf
+AT_CHECK([debugedit-classify-ar -v ./not-elf.a],[1],[],
+[debugedit-classify-ar: no member with debug sections: ./not-elf.a
+])
+AT_CLEANUP
+
+# Check ar file with ELF member
+AT_SETUP([debugedit-classify-ar ELF member])
+AT_KEYWORDS([debugedit-classify-ar] [elf-member])
+echo "int main () {}" | ${CC} -g -xc -o elf -
+${AR} qS elf.a elf
+AT_CHECK([debugedit-classify-ar -v ./elf.a],[0],[],
+[debugedit-classify-ar: found member(s) with debug sections: ./elf.a
+])
+AT_CLEANUP
+
+# Check ar file with ELF member (no debug)
+AT_SETUP([debugedit-classify-ar ELF member (no debug)])
+AT_KEYWORDS([debugedit-classify-ar] [elf-no-debug-member])
+echo "int main () {}" | ${CC} -xc -o elf-no-debug -
+${AR} qS elf-no-debug.a elf-no-debug
+AT_CHECK([debugedit-classify-ar -v ./elf-no-debug.a],[1],[],
+[debugedit-classify-ar: no member with debug sections: ./elf-no-debug.a
+])
+AT_CLEANUP
+
+# Check ar file with too many ELF members
+AT_SETUP([debugedit-classify-ar ELF member (too many)])
+AT_KEYWORDS([debugedit-classify-ar] [elf-too-many-member])
+echo "int main () {}" | ${CC} -g -xc -o elf1 -
+echo "int main () {}" | ${CC} -g -xc -o elf2 -
+echo "int main () {}" | ${CC} -g -xc -o elf3 -
+${AR} qS elf-too-many.a elf1 elf2 elf3
+AT_CHECK([debugedit-classify-ar -v -m 2 ./elf-too-many.a],[1],[],
+[debugedit-classify-ar: too many members (3): ./elf-too-many.a
+])
+AT_CLEANUP
+

@@ -1,6 +1,6 @@
 ## Process this file with automake to produce Makefile.in.
 
-## Copyright (C) 2021 Mark J. Wielaard <mark@klomp.org>
+## Copyright (C) 2021, 2025 Mark J. Wielaard <mark@klomp.org>
 ##
 ## This program is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@ SUBDIRS = tests
 AM_CFLAGS = -Wall
 
 # All our programs
-bin_PROGRAMS = debugedit sepdebugcrcfix
+bin_PROGRAMS = debugedit sepdebugcrcfix debugedit-classify-ar
 
 # Install find-debuginfo in $(bindir)
 bin_SCRIPTS = find-debuginfo
@@ -52,8 +52,13 @@ sepdebugcrcfix_SOURCES = tools/sepdebugcrcfix.c
 sepdebugcrcfix_CFLAGS = @LIBELF_CFLAGS@ $(AM_CFLAGS)
 sepdebugcrcfix_LDADD = @LIBELF_LIBS@
 
+debugedit_classify_ar_SOURCES = tools/debugedit-classify-ar.c
+debugedit_classify_ar_CFLAGS = @LIBELF_CFLAGS@ $(AM_CFLAGS)
+debugedit_classify_ar_LDADD = @LIBELF_LIBS@
+
 # Manual pages are generated for dist
-dist_man_MANS = debugedit.1 sepdebugcrcfix.1 find-debuginfo.1
+dist_man_MANS = debugedit.1 sepdebugcrcfix.1 find-debuginfo.1 \
+	debugedit-classify-ar.1
 
 # The 'case' ensures the man pages are only generated if the corresponding
 # source script (the first prerequisite) or configure.ac (for the version)
@@ -74,6 +79,14 @@ sepdebugcrcfix.1: tools/sepdebugcrcfix.c configure.ac sepdebugcrcfix$(EXEEXT)
 	  *$<* | *configure.ac* ) $(HELP2MAN) -N --output=$@ \
 		--name='fixes CRC for separate .debug files' \
 		./sepdebugcrcfix$(EXEEXT) ;;\
+	  * ) : ;; \
+	esac
+
+debugedit-classify-ar.1: tools/debugedit-classify-ar.c configure.ac debugedit-classify-ar$(EXEEXT)
+	@case '$?' in \
+	  *$<* | *configure.ac* ) $(HELP2MAN) -N --output=$@ \
+		--name='Checks whether ELF archive members should be processed' \
+		./debugedit-classify-ar$(EXEEXT) ;;\
 	  * ) : ;; \
 	esac
 

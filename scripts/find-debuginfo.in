@@ -600,7 +600,14 @@ do_file()
 
   local ar_re="^.*\.a$"
   if [[ $f =~ $ar_re ]]; then # treat as static archive
-      do_ar_file "$1" "$2" "$3"
+      # Sanity check the ar file, skip if it doesn't have debuginfo
+      # or too many members.
+      classify_opts="-m 768"
+      $verbose && classify_opts="$classify_opts --verbose"
+      $quiet && classify_opts="$classify_opts --quiet"
+      if debugedit-classify-ar $classify_opts "$f"; then
+	  do_ar_file "$1" "$2" "$3"
+      fi
       return
   fi
 

@@ -33,6 +33,7 @@ $(srcdir)/package.m4: $(top_srcdir)/configure.ac
 TESTSUITE_AT = \
   testsuite.at \
   debugedit.at \
+  debugedit-classify-ar.at \
   find-debuginfo.at
 
 # Some source files that are needed by the tests

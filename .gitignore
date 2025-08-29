@@ -32,6 +32,8 @@ debugedit
 debugedit.1
 sepdebugcrcfix
 sepdebugcrcfix.1
+debugedit-classify-ar
+debugedit-classify-ar.1
 
 find-debuginfo
 find-debuginfo.1
