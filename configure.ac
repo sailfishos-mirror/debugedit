@@ -50,6 +50,26 @@ AC_CHECK_TOOL([NM], [nm])
 AC_CHECK_TOOL([AR], [ar])
 AM_MISSING_PROG(HELP2MAN, help2man)
 
+AC_CHECK_PROG([HAS_CPIO], [cpio], [yes], [no])
+if test x$HAS_CPIO = xno; then
+  AC_MSG_ERROR([cpio needed by find-debuginfo])
+fi
+
+AC_CHECK_PROG([HAS_EU_STRIP], [eu-strip], [yes], [no])
+if test x$HAS_EU_STRIP = xno; then
+  AC_MSG_ERROR([eu-strip needed by find-debuginfo (strip_to_debug)])
+fi
+
+AC_CHECK_PROG([HAS_XZ], [xz], [yes], [no])
+if test x$HAS_XZ = xno; then
+  AC_MSG_ERROR([xz needed by find-debuginfo (add_minidebug)])
+fi
+
+AC_CHECK_PROG([HAS_GDB_ADD_INDEX], [gdb-add-index], [yes], [no])
+if test x$HAS_GDB_ADD_INDEX = xno; then
+  AC_MSG_ERROR([gdb-add-index needed by find-debuginfo])
+fi
+
 # Whether dwz support -j.
 # Make sure to compile something with -g.
 # Run dwz on it with -j1.
@@ -67,7 +87,7 @@ if test "x$DWZ" = "xdwz"; then
   fi
   CFLAGS="$save_CFLAGS"
 else
-  AC_MSG_WARN([dwz not installed])
+  AC_MSG_ERROR([dwz needed by find-debuginfo])
 fi
 AC_SUBST([DWZ_J])
 
