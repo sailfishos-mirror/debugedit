@@ -69,6 +69,8 @@ AT_CLEANUP
 AT_SETUP([debugedit-classify-ar ELF member (no debug)])
 AT_KEYWORDS([debugedit-classify-ar] [elf-no-debug-member])
 echo "int main () {}" | ${CC} -xc -o elf-no-debug -
+# Make sure all debug is stripped even from startup files
+eu-strip elf-no-debug
 ${AR} qS elf-no-debug.a elf-no-debug
 AT_CHECK([debugedit-classify-ar -v ./elf-no-debug.a],[1],[],
 [debugedit-classify-ar: no member with debug sections: ./elf-no-debug.a
