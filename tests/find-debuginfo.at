@@ -269,6 +269,8 @@ AT_SETUP([find-debuginfo sources debugdata gdb-index dwz])
 AT_KEYWORDS([find-debuginfo] [sources] [debugdata] [gdb-index] [dwz])
 # At the moment dwz doesn't support .debug_addr
 AT_SKIP_IF([test "$DWARF_5_DEBUGADDR" = "yes"])
+# Too new gdb with too old gdb
+AT_SKIP_IF([test "$GDB_ADD_INDEX_CHECKS_OK" = "no"])
 FIND_DEBUGINFO_PKG_BUILD_SETUP
 # Sanity check the binaries have debug sections
 AT_CHECK([$READELF -S subdir_build/foo | grep debug_], [0], [ignore], [])
@@ -335,6 +337,8 @@ AT_SETUP([find-debuginfo sources debugdata gdb-index dwz jobs])
 AT_KEYWORDS([find-debuginfo] [sources] [debugdata] [gdb-index] [dwz] [jobs])
 # At the moment dwz doesn't support .debug_addr
 AT_SKIP_IF([test "$DWARF_5_DEBUGADDR" = "yes"])
+# Too new gdb with too old gdb
+AT_SKIP_IF([test "$GDB_ADD_INDEX_CHECKS_OK" = "no"])
 FIND_DEBUGINFO_PKG_BUILD_SETUP
 # Sanity check the binaries have debug sections
 AT_CHECK([$READELF -S subdir_build/foo | grep debug_], [0], [ignore], [])

@@ -217,6 +217,37 @@ else
 fi
 AC_SUBST([READELF_VERSION_OK])
 
+# Sadly gdb version >= 15 and dwz < 0.16 are incompatible.
+# gdb-add-index will produce .gdb_index version 9 which dwz cannot handle
+# (and silently throws away). Making gdb-add-index plus dwz tests fail.
+# This is not very accurate, there are dwz versions 0.15 with the gdb_index
+# version 9 support backported.
+GDB_VERSION_STRING=$(gdb --version | head -1)
+# The double [[ and ]] is because of configure.ac being an m4 script.
+GDB_VERSION_REGEXP='s/.* ([[0-9]]+)\.([[0-9]]+).*/\1/'
+GDB_MAJOR=$(echo "$GDB_VERSION_STRING" | sed -E "$GDB_VERSION_REGEXP")
+# Older dwz output --version to stderr.
+DWZ_VERSION_STRING=$(dwz --version 2>&1 | head -1)
+# The double [[ and ]] is because of configure.ac being an m4 script.
+DWZ_VERSION_REGEXP_MAJOR='s/.* ([[0-9]]+)\.([[0-9]]+).*/\1/'
+DWZ_VERSION_REGEXP_MINOR='s/.* ([[0-9]]+)\.([[0-9]]+).*/\2/'
+DWZ_MAJOR=$(echo "$DWZ_VERSION_STRING" | sed -E "$DWZ_VERSION_REGEXP_MAJOR")
+DWZ_MINOR=$(echo "$DWZ_VERSION_STRING" | sed -E "$DWZ_VERSION_REGEXP_MINOR")
+AC_CACHE_CHECK([gdb and dwz versions for gdb-add-index tests], ac_cv_gdb_dwz_ver, [dnl
+ac_cv_gdb_dwz_ver="$GDB_MAJOR-vs-$DWZ_MAJOR.$DWZ_MINOR"
+])
+if test "$GDB_MAJOR" -lt "15"; then
+  GDB_ADD_INDEX_CHECKS_OK="yes"
+elif test "$DWZ_MAJOR" -gt "0"; then
+  GDB_ADD_INDEX_CHECKS_OK="yes"
+elif test "$DWZ_MINOR" -ge "16"; then
+  GDB_ADD_INDEX_CHECKS_OK="yes"
+else
+  AC_MSG_WARN([$GDB_VERSION_STRING and $DWZ_VERSION_STRING cannot do gdb-add-index tests])
+  GDB_ADD_INDEX_CHECKS_OK="no"
+fi
+AC_SUBST([GDB_ADD_INDEX_CHECKS_OK])
+
 ENABLE_INLINED_XXHASH=yes
 AC_ARG_ENABLE(inlined-xxhash,
 	AS_HELP_STRING([--disable-inlined-xxhash], [disable the inlined-only version of xxhash library]),
