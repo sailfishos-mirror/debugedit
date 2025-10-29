@@ -330,21 +330,23 @@ fi
 
 $quiet || echo "find-debuginfo: starting" 2>&1
 
+OUTDIR=$BUILDDIR
+
 i=0
 while ((i < nout)); do
-  outs[$i]="$BUILDDIR/${outs[$i]}"
+  outs[$i]="$OUTDIR/${outs[$i]}"
   l=''
   for f in ${lists[$i]}; do
-    l="$l $BUILDDIR/$f"
+    l="$l $OUTDIR/$f"
   done
   lists[$i]=$l
   ((++i))
 done
 
-LISTFILE="$BUILDDIR/$out"
-SOURCEFILE="$BUILDDIR/debugsources.list"
-LINKSFILE="$BUILDDIR/debuglinks.list"
-ELFBINSFILE="$BUILDDIR/elfbins.list"
+LISTFILE="$OUTDIR/$out"
+SOURCEFILE="$OUTDIR/debugsources.list"
+LINKSFILE="$OUTDIR/debuglinks.list"
+ELFBINSFILE="$OUTDIR/elfbins.list"
 
 > "$SOURCEFILE"
 > "$LISTFILE"
@@ -888,7 +890,7 @@ if [ -d "${RPM_BUILD_ROOT}/usr/lib" ] || [ -d "${RPM_BUILD_ROOT}/usr/src" ]; the
 fi
 
 if [ -n "$srcout" ]; then
-  srcout="$BUILDDIR/$srcout"
+  srcout="$OUTDIR/$srcout"
   > "$srcout"
   if [ -d "${RPM_BUILD_ROOT}/usr/src/debug" ]; then
     (cd "${RPM_BUILD_ROOT}/usr"
