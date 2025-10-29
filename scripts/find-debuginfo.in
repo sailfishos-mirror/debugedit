@@ -33,6 +33,7 @@ Options:
 [-j N] [--jobs N]
 [-o debugfiles.list]
 [-S debugsourcefiles.list]
+[-O PATH] [--output-dir PATH]
 [--run-dwz] [--dwz-low-mem-die-limit N]
 [--dwz-max-die-limit N]
 [--dwz-single-file-mode]
@@ -73,6 +74,10 @@ an additional output file with the debuginfo for the files in
 the -l filelist file, or whose names match the -p pattern.
 The -p argument is an grep -E -style regexp matching the a file name,
 and must not use anchors (^ or $).
+
+The -O or --output-dir PATH flag instructs find-debuginfo to store all output
+files in the PATH directory. If not given, all output files will be stored in
+builddir.
 
 The --run-dwz flag instructs find-debuginfo to run the dwz utility
 if available, and --dwz-low-mem-die-limit and --dwz-max-die-limit
@@ -183,6 +188,7 @@ fi
 
 
 BUILDDIR=.
+OUTDIR=
 out=debugfiles.list
 srcout=
 nout=0
@@ -239,6 +245,10 @@ while [ $# -gt 0 ]; do
       outs[$nout]=$2
       ((nout++))
     fi
+    shift
+    ;;
+  -O|--output-dir)
+    OUTDIR=$2
     shift
     ;;
   -l)
@@ -330,7 +340,7 @@ fi
 
 $quiet || echo "find-debuginfo: starting" 2>&1
 
-OUTDIR=$BUILDDIR
+[ -z "$OUTDIR" ] && OUTDIR=$BUILDDIR
 
 i=0
 while ((i < nout)); do
@@ -348,6 +358,7 @@ SOURCEFILE="$OUTDIR/debugsources.list"
 LINKSFILE="$OUTDIR/debuglinks.list"
 ELFBINSFILE="$OUTDIR/elfbins.list"
 
+mkdir -p "$OUTDIR"
 > "$SOURCEFILE"
 > "$LISTFILE"
 > "$LINKSFILE"

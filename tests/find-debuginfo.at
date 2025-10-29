@@ -428,3 +428,29 @@ AT_CHECK([env RPM_BUILD_DIR=${PWD} \
 # Check builddir against the snapshot
 AT_CHECK([ls subdir_build | sort], [0], [expout], [])
 AT_CLEANUP
+
+# Run find-debuginfo on a small build and check all output files (and only
+# those) were created in the supplied output directory
+AT_SETUP([find-debuginfo output files (custom dir)])
+AT_KEYWORDS([find-debuginfo] [output])
+FIND_DEBUGINFO_PKG_BUILD_SETUP
+# Make a snapshot of builddir
+AT_CHECK([ls subdir_build | sort > expout], [0], [], [])
+# We need to set some environment variables for running find-debuginfo
+# normally set by rpmbuild.
+AT_CHECK([env RPM_BUILD_DIR=${PWD} \
+              RPM_BUILD_ROOT=${PWD} \
+              RPM_PACKAGE_NAME=pkg \
+              RPM_PACKAGE_VERSION=ver \
+              RPM_PACKAGE_RELEASE=rel \
+              RPM_ARCH=arch \
+          find-debuginfo -p '.*' -o allfiles.list \
+                         -O ${PWD}/output ${PWD}/subdir_build],
+         [0], [ignore], [])
+# Check builddir against the snapshot
+AT_CHECK([ls subdir_build | sort], [0], [expout], [])
+# Check the output directory against the expected list
+AT_CHECK([(echo allfiles.list; echo "FIND_DEBUGINFO_OUTPUT_FILES") |
+          sort > expout], [0], [], [])
+AT_CHECK([ls output | sort], [0], [expout], [])
+AT_CLEANUP
