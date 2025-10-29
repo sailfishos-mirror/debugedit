@@ -99,6 +99,13 @@ $CC $CFLAGS -Wl,--build-id -g3 -I. -o baz baz.c foo.c bar.c
 cd ..
 ]])
 
+# Names of all output files produced by find-debuginfo
+m4_define([FIND_DEBUGINFO_OUTPUT_FILES],
+[debugfiles.list
+debuglinks.list
+debugsources.list
+elfbins.list])
+
 # Run find-debuginfo on a small build without any fancy options
 AT_SETUP([find-debuginfo sources])
 AT_KEYWORDS([find-debuginfo] [sources])
@@ -397,4 +404,27 @@ subdir_build/foobar.h
 ])
 AT_CHECK([cat subdir_build/debugsources.list | tr '\0' '\n' | sort -u],
          [0], [expout], [])
+AT_CLEANUP
+
+# Run find-debuginfo on a small build and check all output files (and only
+# those) were created
+AT_SETUP([find-debuginfo output files])
+AT_KEYWORDS([find-debuginfo] [output])
+FIND_DEBUGINFO_PKG_BUILD_SETUP
+# Make a snapshot of builddir, including the expected output files
+AT_CHECK([(ls subdir_build;
+           echo "FIND_DEBUGINFO_OUTPUT_FILES") | sort > expout],
+         [0], [], [])
+# We need to set some environment variables for running find-debuginfo
+# normally set by rpmbuild.
+AT_CHECK([env RPM_BUILD_DIR=${PWD} \
+              RPM_BUILD_ROOT=${PWD} \
+              RPM_PACKAGE_NAME=pkg \
+              RPM_PACKAGE_VERSION=ver \
+              RPM_PACKAGE_RELEASE=rel \
+              RPM_ARCH=arch \
+          find-debuginfo ${PWD}/subdir_build],
+         [0], [ignore], [])
+# Check builddir against the snapshot
+AT_CHECK([ls subdir_build | sort], [0], [expout], [])
 AT_CLEANUP
