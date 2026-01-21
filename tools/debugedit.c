@@ -1,5 +1,5 @@
 /* Copyright (C) 2001-2003, 2005, 2007, 2009-2011, 2016, 2017 Red Hat, Inc.
-   Copyright (C) 2022, 2023, 2024, 2025 Mark J. Wielaard <mark@klomp.org>
+   Copyright (C) 2022, 2023, 2024, 2025, 2026 Mark J. Wielaard <mark@klomp.org>
    Written by Alexander Larsson <alexl@redhat.com>, 2002
    Based on code by Jakub Jelinek <jakub@redhat.com>, 2001.
    String/Line table rewriting by Mark Wielaard <mjw@redhat.com>, 2017.
@@ -647,8 +647,24 @@ setup_relbuf (DSO *dso, debug_section *sec)
 	   && sym.st_shndx != debug_sections[DEBUG_MACRO].sec
 	   && sym.st_shndx != debug_sections[DEBUG_ABBREV].sec))
 	continue;
-      rela.r_addend += sym.st_value;
-      rtype = ELF64_R_TYPE (rela.r_info);
+
+      rtype = GELF_R_TYPE (rela.r_info);
+
+      /* We normally expect the relocation to be against an
+	 STT_SECTION symbol, which has an st_value of zero. So only
+	 the relocation r_addend counts.  But some archves (riscv) use
+	 relocations with zero r_addend, and symbols where the
+	 st_value has the (relative to the start of the section)
+	 offset.  */
+      if (GELF_ST_TYPE (sym.st_info) == STT_SECTION
+	  && sym.st_value == 0)
+	; /* rela.r_addend already contains the offset.  */
+      else if (GELF_ST_TYPE (sym.st_info) != STT_SECTION
+	       && rela.r_addend == 0)
+	rela.r_addend = sym.st_value; /* offset is in st_value.  */
+      else
+	goto fail; /* This is not the relocation you are looking for.  */
+
       switch (dso->ehdr.e_machine)
 	{
 	case EM_SPARC:
@@ -769,6 +785,8 @@ update_rela_data (DSO *dso, struct debug_section *sec)
 
   REL *relptr = sec->relbuf;
   REL *relend = sec->relend;
+  bool rel_updated = false;
+  bool sym_updated = false;
   while (relptr < relend)
     {
       GElf_Sym sym;
@@ -783,15 +801,40 @@ update_rela_data (DSO *dso, struct debug_section *sec)
 		       &sym) == NULL)
 	error (1, 0, "Couldn't get symbol: %s", elf_errmsg (-1));
 
-      rela.r_addend = relptr->addend - sym.st_value;
+      if (GELF_ST_TYPE (sym.st_info) == STT_SECTION)
+	{
+	  if (rela.r_addend != relptr->addend)
+	    {
+	      rela.r_addend = relptr->addend;
 
-      if (gelf_update_rela (data, ndx, &rela) == 0)
-	error (1, 0, "Couldn't update relocations: %s",
-	       elf_errmsg (-1));
+	      if (gelf_update_rela (data, ndx, &rela) == 0)
+		error (1, 0, "Couldn't update relocations: %s",
+		       elf_errmsg (-1));
 
+	      rel_updated = true;
+	    }
+	}
+      else
+	{
+	  if (sym.st_value != relptr->addend)
+	    {
+	      sym.st_value = relptr->addend;
+
+	      if (gelf_update_sym (symdata,
+				   GELF_R_SYM (rela.r_info), &sym) == 0)
+		error (1, 0, "Couldn't update relocation symbols: %s",
+		       elf_errmsg (-1));
+
+	      sym_updated = true;
+	    }
+	}
       ++relptr;
     }
-  elf_flagdata (data, ELF_C_SET, ELF_F_DIRTY);
+
+  if (rel_updated)
+    elf_flagdata (data, ELF_C_SET, ELF_F_DIRTY);
+  if (sym_updated)
+    elf_flagdata (symdata, ELF_C_SET, ELF_F_DIRTY);
 
   free (sec->relbuf);
 }
