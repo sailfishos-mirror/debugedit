@@ -1,7 +1,7 @@
 # find-debuginfo.at: Tests for the find-debuginfo script
 #
 # Copyright (C) 2025 Red Hat Inc.
-# Copyright (C) 2025 Mark J. Wielaard <mark@klomp.org>
+# Copyright (C) 2025, 2026 Mark J. Wielaard <mark@klomp.org>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -91,11 +91,15 @@ cp "${abs_srcdir}"/data/SOURCES/bar.c subdir_build
 cp "${abs_srcdir}"/data/SOURCES/foobar.h subdir_build
 cp "${abs_srcdir}"/data/SOURCES/baz.c subdir_build
 cd subdir_build
+# Create .o files to pack into an .a later
+$CC $CFLAGS -g3 -I. -c foo.c
+$CC $CFLAGS -g3 -I. -c bar.c
+$CC $CFLAGS -g3 -I. -c baz.c
 # Three almost identical binaries
 # so dwz has something to put into the alt file
-$CC $CFLAGS -Wl,--build-id -g3 -I. -o foo foo.c bar.c baz.c
-$CC $CFLAGS -Wl,--build-id -g3 -I. -o bar bar.c baz.c foo.c
-$CC $CFLAGS -Wl,--build-id -g3 -I. -o baz baz.c foo.c bar.c
+$CC $CFLAGS -Wl,--build-id -g3 -I. -o foo foo.o bar.o baz.o
+$CC $CFLAGS -Wl,--build-id -g3 -I. -o bar bar.o baz.o foo.o
+$CC $CFLAGS -Wl,--build-id -g3 -I. -o baz baz.o foo.o bar.o
 cd ..
 ]])
 
@@ -453,4 +457,113 @@ AT_CHECK([ls subdir_build | sort], [0], [expout], [])
 AT_CHECK([(echo allfiles.list; echo "FIND_DEBUGINFO_OUTPUT_FILES") |
           sort > expout], [0], [], [])
 AT_CHECK([ls output | sort], [0], [expout], [])
+AT_CLEANUP
+
+# Run find-debuginfo on a small build and check elf file
+AT_SETUP([find-debuginfo check-elf])
+AT_KEYWORDS([find-debuginfo] [check-elf])
+FIND_DEBUGINFO_PKG_BUILD_SETUP
+# We need to set some environment variables for running find-debuginfo
+# normally set by rpmbuild.
+AT_CHECK([env RPM_BUILD_DIR=${PWD} \
+              RPM_BUILD_ROOT=${PWD} \
+              RPM_PACKAGE_NAME=pkg \
+              RPM_PACKAGE_VERSION=ver \
+              RPM_PACKAGE_RELEASE=rel \
+              RPM_ARCH=arch \
+          find-debuginfo --check-elf-strict --verbose ${PWD}/subdir_build],
+         [0], [stdout], [])
+AT_CHECK([grep "No errors" stdout], [0], [ignore], [])
+AT_CLEANUP
+
+# Run find-debuginfo on a small build and check elf file
+AT_SETUP([find-debuginfo check-elf debugdata])
+AT_KEYWORDS([find-debuginfo] [check-elf] [debugdata])
+FIND_DEBUGINFO_PKG_BUILD_SETUP
+# We need to set some environment variables for running find-debuginfo
+# normally set by rpmbuild.
+#
+# generate .gnu_debugdata (-m) for binaries in subdir_build.
+AT_CHECK([env RPM_BUILD_DIR=${PWD} \
+              RPM_BUILD_ROOT=${PWD} \
+              RPM_PACKAGE_NAME=pkg \
+              RPM_PACKAGE_VERSION=ver \
+              RPM_PACKAGE_RELEASE=rel \
+              RPM_ARCH=arch \
+          find-debuginfo -m --check-elf-strict --verbose ${PWD}/subdir_build],
+         [0], [stdout], [])
+AT_CHECK([grep "No errors" stdout], [0], [ignore], [])
+AT_CLEANUP
+
+# Run find-debuginfo on a small build and check elf file
+AT_SETUP([find-debuginfo check-elf debugdata gdb-index])
+AT_KEYWORDS([find-debuginfo] [check-elf] [debugdata] [gdb-index])
+# Too new gdb with too old gdb
+AT_SKIP_IF([test "$GDB_ADD_INDEX_CHECKS_OK" = "no"])
+FIND_DEBUGINFO_PKG_BUILD_SETUP
+# We need to set some environment variables for running find-debuginfo
+# normally set by rpmbuild.
+#
+# generate .gnu_debugdata (-m) and .gdb_index (-i) for binaries in
+# subdir_build.
+AT_CHECK([env RPM_BUILD_DIR=${PWD} \
+              RPM_BUILD_ROOT=${PWD} \
+              RPM_PACKAGE_NAME=pkg \
+              RPM_PACKAGE_VERSION=ver \
+              RPM_PACKAGE_RELEASE=rel \
+              RPM_ARCH=arch \
+          find-debuginfo -m -i --check-elf-strict --verbose ${PWD}/subdir_build],
+         [0], [stdout], [])
+AT_CHECK([grep "No errors" stdout], [0], [ignore], [])
+AT_CLEANUP
+
+# Run find-debuginfo on a small build and check elf file
+AT_SETUP([find-debuginfo check-elf debugdata gdb-index dwz])
+AT_KEYWORDS([find-debuginfo] [check-elf] [debugdata] [gdb-index] [dwz])
+# At the moment dwz doesn't support .debug_addr
+AT_SKIP_IF([test "$DWARF_5_DEBUGADDR" = "yes"])
+# Too new gdb with too old gdb
+AT_SKIP_IF([test "$GDB_ADD_INDEX_CHECKS_OK" = "no"])
+FIND_DEBUGINFO_PKG_BUILD_SETUP
+# We need to set some environment variables for running find-debuginfo
+# normally set by rpmbuild.
+#
+# generate .gnu_debugdata (-m), .gdb_index (-i) and run dwz (--run-dwz)
+# for binaries in subdir_build.
+AT_CHECK([env RPM_BUILD_DIR=${PWD} \
+              RPM_BUILD_ROOT=${PWD} \
+              RPM_PACKAGE_NAME=pkg \
+              RPM_PACKAGE_VERSION=ver \
+              RPM_PACKAGE_RELEASE=rel \
+              RPM_ARCH=arch \
+          find-debuginfo -m -i --run-dwz --check-elf-strict --verbose ${PWD}/subdir_build],
+         [0], [stdout], [])
+AT_CHECK([grep "No errors" stdout], [0], [ignore], [])
+AT_CLEANUP
+
+# Run find-debuginfo on a small build, create an archive and check files
+AT_SETUP([find-debuginfo check-elf ar])
+AT_KEYWORDS([find-debuginfo] [check-elf] [ar])
+# skip if ar too old to support O
+AT_SKIP_IF([ test -z "`ar 2>&1 | grep -F '[O]'`" ])
+FIND_DEBUGINFO_PKG_BUILD_SETUP
+# Create an archive from the object files
+mkdir -p subdir_ar
+AT_CHECK([ar q ./subdir_ar/archive.a $(find subdir_build -name '*.o')],
+         [0], [ignore], [ignore])
+# Make sure eu-elflint --gnu work on the simple input archive.
+# It might not if llvm is used for example.
+AT_SKIP_IF([! eu-elflint --gnu ./subdir_ar/archive.a | grep -q 'No errors'])
+# We need to set some environment variables for running find-debuginfo
+# normally set by rpmbuild.
+AT_CHECK([env RPM_BUILD_DIR=${PWD} \
+              RPM_BUILD_ROOT=${PWD} \
+              RPM_PACKAGE_NAME=pkg \
+              RPM_PACKAGE_VERSION=ver \
+              RPM_PACKAGE_RELEASE=rel \
+              RPM_ARCH=arch \
+          find-debuginfo --check-elf-strict --verbose ${PWD}/subdir_ar],
+         [0], [stdout], [ignore])
+AT_CHECK([grep "check AR file" stdout], [0], [ignore], [])
+AT_CHECK([grep "No errors" stdout], [0], [ignore], [])
 AT_CLEANUP

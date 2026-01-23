@@ -6,6 +6,7 @@
 
 # Copyright (C) 2002-2021 rpm and debugedit contributors
 # Copyright (C) 2025 Red Hat Inc.
+# Copyright (C) 2026 Mark J. Wielaard <mark@klomp.org>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -41,6 +42,7 @@ Options:
 [--unique-debug-suffix SUFFIX]
 [--unique-debug-src-base BASE]
 [[-l filelist]... [-p 'pattern'] -o debuginfo.list]
+[--check-elf] [--check-elf-strict]
 [builddir]
 
 The -g flag says to use strip -g instead of full strip on DSOs or EXEs.
@@ -110,6 +112,14 @@ The -q or --quiet flag silences all non-error output from the script.
 The -v or --verbose flag add more output for all files processed.
 When neither -q or -v is given then only output for each pass is given.
 
+The --check-elf and --check-elf-strict flags will run eu-elflint --gnu
+on the ELF and AR files before and after processing the
+files. Including on the generated separate .debug files. When
+--check-elf-strict is given then if eu-elflint reports any errors
+find-debuginfo will exit with a failure status. With just --check-elf
+given any eu-elflint output will be logged but not change the exit
+status.
+
 All file names in switches are relative to builddir ('.' if not given).
 EOF
 }
@@ -152,6 +162,12 @@ strict=false
 # Do not recompute build IDs.
 no_recompute_build_id=false
 
+# Whether to run eu-elflint on all files
+check_elf=false
+
+# Whether eu-elflint reporting an issue should result in a fatal exit
+check_elf_strict=false
+
 # DWZ parameters.
 run_dwz=false
 dwz_low_mem_die_limit=
@@ -189,6 +205,9 @@ else
     process_ar=false
 fi
 
+# which flags to use for eu-elflint, always use --gnu
+# Others set below based on verbose/quiet
+elflint_opts="--gnu"
 
 BUILDDIR=.
 OUTDIR=
@@ -291,6 +310,13 @@ while [ $# -gt 0 ]; do
   --no-ar-files)
     process_ar=false
     ;;
+  --check-elf)
+    check_elf=true
+    ;;
+  --check-elf-strict)
+    check_elf=true
+    check_elf_strict=true
+    ;;
   -q|--quiet)
     quiet=true
     verbose=false
@@ -340,6 +366,8 @@ if [ "$strip_g" = "true" ] && [ "$strip_glibs" = "true" ]; then
   echo >&2 "*** ERROR: -g  and --g-libs cannot be used together"
   exit 2
 fi
+
+$verbose || elflint_opts="$elflint_opts --quiet"
 
 $quiet || echo "find-debuginfo: starting" 2>&1
 
@@ -471,6 +499,10 @@ set -o pipefail
 strict_error=ERROR
 $strict || strict_error=WARNING
 
+# Setup for do_check_elf
+check_elf_msg=ERROR
+$check_elf_strict || check_elf_msg=WARNING
+
 temp=$(mktemp -d ${TMPDIR:-/tmp}/find-debuginfo.XXXXXX)
 trap 'rm -rf "$temp"' EXIT
 
@@ -503,6 +535,26 @@ while read nlinks inum f; do
   echo "$nlinks $inum $f" >>"$temp/primary"
 done
 
+# Check ELF or AR file with eu-elflint if --elf-check is given.
+# Returns 1 if --elf-check-strict is given and eu-elflint reports issues.
+# Otherwise returns 0.
+do_check_elf()
+{
+  local msg="$1"
+  local file="$2"
+  local debug_opt="$3"
+  local issue
+
+  if [ "$check_elf" = "true" ]; then
+    $verbose && echo "$msg $file"
+    eu-elflint $elflint_opts $debug_opt "$file"
+    if [ $? -ne 0 ]; then
+      echo "$check_elf_msg: eu-elflint found issues in $file"
+      $check_elf_strict && return 1
+    fi
+  fi
+  return 0
+}
 
 # Handle ELF archives
 do_ar_file()
@@ -520,7 +572,9 @@ do_ar_file()
   fi
 
   $verbose && echo "processing debug info in $f"
-  
+
+  do_check_elf "pre-check AR file" "$f" "" || return 1
+
   # Extract members from archive, one at a time.  There may be
   # duplicate names, so we can't just extract the entire archive in
   # one go (overwriting each other).  Instead, we pick off member
@@ -603,6 +657,8 @@ do_ar_file()
   
   $verbose && echo found $(tr -dc '\0' < "$SOURCEFILE" | wc -c) source files
 
+  do_check_elf "check AR file" "$f" "" || return 1
+
   # NB: no need to strip or dwz-compress or gdbindex or
   # ELFBINSFILE-collect objects / archives.  These operations only
   # make sense on the final binaries that the static archives are
@@ -641,10 +697,12 @@ do_file()
       $verbose && classify_opts="$classify_opts --verbose"
       $quiet && classify_opts="$classify_opts --quiet"
       if debugedit-classify-ar $classify_opts "$f"; then
-	  do_ar_file "$1" "$2" "$3"
+	  do_ar_file "$1" "$2" "$3" || return 1
       fi
-      return
+      return 0;
   fi
+
+  do_check_elf "pre-check ELF file" "$f" || return 1
 
   $verbose && echo "extracting debug info from $f"
   # See also cpio SOURCEFILE copy. Directories must match up.
@@ -750,6 +808,9 @@ do_file()
   fi
 
   echo "./${f#$RPM_BUILD_ROOT}" >> "$ELFBINSFILE"
+
+  do_check_elf "check ELF file" "$f" "" || return 1
+  do_check_elf "check debug file" "$debugfn" "--debug" || return 1
 
   # If this file has multiple links, make the corresponding .debug files
   # all links to one file too.

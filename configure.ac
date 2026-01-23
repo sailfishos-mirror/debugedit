@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-# Copyright (C) 2021, 2024, 2025 Mark J. Wielaard <mark@klomp.org>
+# Copyright (C) 2021, 2024, 2025, 2026 Mark J. Wielaard <mark@klomp.org>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -68,6 +68,11 @@ fi
 AC_CHECK_PROG([HAS_GDB_ADD_INDEX], [gdb-add-index], [yes], [no])
 if test x$HAS_GDB_ADD_INDEX = xno; then
   AC_MSG_ERROR([gdb-add-index needed by find-debuginfo])
+fi
+
+AC_CHECK_PROG([HAS_EU_ELFLINT], [eu-elflint], [yes], [no])
+if test x$HAS_HAS_EU_ELFLINT = xno; then
+  AC_MSG_ERROR([eu-elflint needed by find-debuginfo (--check-elf)])
 fi
 
 # Whether dwz support -j.
