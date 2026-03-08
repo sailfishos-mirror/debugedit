@@ -63,6 +63,15 @@ $LD $LDFLAGS -r -o foobarbaz.part.o foo.o subdir_bar/bar.o baz.o
 $CC $CFLAGS -g3 $GZ_FLAG $1 -o foobarbaz.exe foo.o subdir_bar/bar.o baz.o
 ]])
 
+m4_define([DEBUGEDIT_SETUP_LARGE],[[
+# Create some a large test binaries (65280+ sections).
+
+export HOME=${PWD}
+cp "${abs_srcdir}"/data/SOURCES/large.c .
+
+$CXX $CXXFLAGS -g -c large.c
+]])
+
 # ===
 # Check debugedit --help doesn't crash and burn.
 # ===
@@ -936,5 +945,33 @@ AT_CHECK([[debugedit -p -b $(pwd) -d /foo/bar/baz ./main]])
 
 # check timestamps were preserved
 AT_CHECK([[stat -c "%x %y" main]], [0], [expout], [])
+
+AT_CLEANUP
+
+# debugedit should handle Elf files with > 65280 sections
+AT_SETUP([debugedit large file])
+AT_KEYWORDS([debugedit] [large])
+DEBUGEDIT_SETUP_LARGE
+
+# The debuginfo contains the current working directory
+AT_CHECK([[
+$READELF --debug-dump=info ./large.o | grep $(pwd)
+]],[0],[ignore],[ignore])
+
+AT_CHECK([[debugedit -b $(pwd) -d /foo ./large.o]])
+
+# Now it should not contain $(pwd)
+AT_CHECK([[
+$READELF --debug-dump=info ./large.o | grep $(pwd)
+]],[1],[ignore],[ignore])
+
+# Make sure it does contain /foo instead.
+AT_DATA([expout],
+[/foo
+])
+AT_CHECK([[
+$READELF --debug-dump=info ./large.o | grep -E 'DW_AT_(name|comp_dir)' \
+        | rev | cut -d: -f1 | rev | cut -c2- | grep ^/foo | sort -u
+]],[0],[expout],[ignore])
 
 AT_CLEANUP
