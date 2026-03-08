@@ -232,6 +232,8 @@ typedef struct
   const char *filename;
   int lastscn;
   size_t phnum;
+  size_t shnum;
+  size_t shstrndx;
   struct strings debug_str, debug_line_str;
   struct debug_lines lines;
   /* List of CUs that keeps track of version, ptr_size,
@@ -574,6 +576,48 @@ rel_cmp (const void *a, const void *b)
   return 0;
 }
 
+/* Wrapper for elf_scnshndx which is broken before elfutils 0.193.  */
+static int
+scnshndx (Elf *elf, Elf_Scn *scn)
+{
+#if !_ELFUTILS_PREREQ (0, 193)
+  size_t scnndx = elf_ndxscn (scn);
+  /* By convention the SHT_SYMTAB_SHNDX section is right after the
+     SHT_SYMTAB section, so start there.  */
+  Elf_Scn *nscn = scn;
+  while ((nscn = elf_nextscn (elf, nscn)) != NULL)
+    {
+      GElf_Shdr shdr_mem;
+      GElf_Shdr *shdr = gelf_getshdr (nscn, &shdr_mem);
+      if (shdr == NULL)
+        return -1;
+
+      if (shdr->sh_type == SHT_SYMTAB_SHNDX && shdr->sh_link == scnndx)
+        return elf_ndxscn (nscn);
+    }
+
+  /* OK, not found, start from the top.  */
+  nscn = NULL;
+  while ((nscn = elf_nextscn (elf, nscn)) != NULL
+         && elf_ndxscn (nscn) != scnndx)
+    {
+      GElf_Shdr shdr_mem;
+      GElf_Shdr *shdr = gelf_getshdr (nscn, &shdr_mem);
+      shdr = gelf_getshdr (nscn, &shdr_mem);
+      if (shdr == NULL)
+        return -1;
+
+      if (shdr->sh_type == SHT_SYMTAB_SHNDX && shdr->sh_link == scnndx)
+        return elf_ndxscn (nscn);
+    }
+
+  /* No shndx found, but no errors.  */
+  return 0;
+#else
+  return elf_scnshndx (scn);
+#endif
+}
+
 /* Returns a malloced REL array, or NULL when there are no relocations
    for this section.  When there are relocations, will setup relend,
    as the last REL, and reltype, as SHT_REL or SHT_RELA.  */
@@ -585,7 +629,11 @@ setup_relbuf (DSO *dso, debug_section *sec)
   GElf_Rela rela;
   GElf_Sym sym;
   GElf_Addr base = dso->shdr[sec->sec].sh_addr;
+  Elf_Scn *symscn;
   Elf_Data *symdata = NULL;
+  Elf_Data *xndxdata = NULL;
+  int xndxscnidx;
+  Elf32_Word shndx;
   int rtype;
   REL *relbuf;
   REL *relend;
@@ -615,11 +663,22 @@ setup_relbuf (DSO *dso, debug_section *sec)
   if (relbuf == NULL)
     error (1, errno, "%s: Could not allocate memory", dso->filename);
 
-  symdata = elf_getdata (dso->scn[dso->shdr[i].sh_link], NULL);
+  symscn = dso->scn[dso->shdr[i].sh_link];
+  symdata = elf_getdata (symscn, NULL);
   assert (symdata != NULL && symdata->d_buf != NULL);
   assert (elf_getdata (dso->scn[dso->shdr[i].sh_link], symdata) == NULL);
   assert (symdata->d_off == 0);
   assert (symdata->d_size == dso->shdr[dso->shdr[i].sh_link].sh_size);
+
+  /* Get extended section index table if there are 64k+ sections.  */
+  xndxscnidx = dso->shnum >= SHN_LORESERVE ? scnshndx (dso->elf, symscn) : 0;
+  if (xndxscnidx > 0)
+    {
+      xndxdata = elf_getdata (elf_getscn (dso->elf, xndxscnidx), NULL);
+      if (xndxdata == NULL)
+	error (1, 0, "%s: Could not get extended section index table: %s",
+	       dso->filename, elf_errmsg (-1));
+    }
 
   for (ndx = 0, relend = relbuf; ndx < maxndx; ++ndx)
     {
@@ -632,20 +691,23 @@ setup_relbuf (DSO *dso, debug_section *sec)
 	}
       else
 	gelf_getrela (data, ndx, &rela);
-      gelf_getsym (symdata, ELF64_R_SYM (rela.r_info), &sym);
+      gelf_getsymshndx (symdata, xndxdata, ELF64_R_SYM (rela.r_info),
+			&sym, &shndx);
+      if (sym.st_shndx != SHN_XINDEX)
+	shndx = sym.st_shndx;
       /* Relocations against section symbols are uninteresting in REL.  */
       if (dso->shdr[i].sh_type == SHT_REL && sym.st_value == 0)
 	continue;
       /* Only consider relocations against .debug_str,
 	 .debug_str_offsets, .debug_line, .debug_line_str,
 	 .debug_macro and .debug_abbrev.  */
-      if (sym.st_shndx == 0 ||
-	  (sym.st_shndx != debug_sections[DEBUG_STR].sec
-	   && sym.st_shndx != debug_sections[DEBUG_STR_OFFSETS].sec
-	   && sym.st_shndx != debug_sections[DEBUG_LINE].sec
-	   && sym.st_shndx != debug_sections[DEBUG_LINE_STR].sec
-	   && sym.st_shndx != debug_sections[DEBUG_MACRO].sec
-	   && sym.st_shndx != debug_sections[DEBUG_ABBREV].sec))
+      if (shndx == 0 ||
+	  (shndx != debug_sections[DEBUG_STR].sec
+	   && shndx != debug_sections[DEBUG_STR_OFFSETS].sec
+	   && shndx != debug_sections[DEBUG_LINE].sec
+	   && shndx != debug_sections[DEBUG_LINE_STR].sec
+	   && shndx != debug_sections[DEBUG_MACRO].sec
+	   && shndx != debug_sections[DEBUG_ABBREV].sec))
 	continue;
 
       rtype = GELF_R_TYPE (rela.r_info);
@@ -2963,11 +3025,11 @@ edit_dwarf2 (DSO *dso)
       debug_sections[i].relsec = 0;
     }
 
-  for (i = 1; i < dso->ehdr.e_shnum; ++i)
+  for (i = 1; i < dso->shnum; ++i)
     if (! (dso->shdr[i].sh_flags & (SHF_ALLOC | SHF_WRITE | SHF_EXECINSTR))
 	&& dso->shdr[i].sh_size)
       {
-        const char *name = strptr (dso, dso->ehdr.e_shstrndx,
+        const char *name = strptr (dso, dso->shstrndx,
 				   dso->shdr[i].sh_name);
 
 	if (name != NULL
@@ -3513,7 +3575,7 @@ fdopen_dso (int fd, const char *name)
   GElf_Ehdr ehdr;
   int i;
   DSO *dso = NULL;
-  size_t phnum;
+  size_t phnum, shnum, shstrndx;
 
   if (dest_dir == NULL && (!do_build_id || no_recompute_build_id))
     elf = elf_begin (fd, ELF_C_READ, NULL);
@@ -3544,11 +3606,23 @@ fdopen_dso (int fd, const char *name)
       goto error_out;
     }
 
+  if (elf_getshdrnum (elf, &shnum) != 0)
+    {
+      error (0, 0, "Couldn't get number of shdrs: %s", elf_errmsg (-1));
+      goto error_out;
+    }
+
+  if (elf_getshdrstrndx (elf, &shstrndx) != 0)
+    {
+      error (0, 0, "Couldn't get section string index: %s", elf_errmsg (-1));
+      goto error_out;
+    }
+
   /* Allocate DSO structure. Leave place for additional 20 new section
      headers.  */
   dso = (DSO *)
-	malloc (sizeof(DSO) + (ehdr.e_shnum + 20) * sizeof(GElf_Shdr)
-	        + (ehdr.e_shnum + 20) * sizeof(Elf_Scn *));
+	malloc (sizeof(DSO) + (shnum + 20) * sizeof(GElf_Shdr)
+	        + (shnum + 20) * sizeof(Elf_Scn *));
   if (!dso)
     {
       error (0, ENOMEM, "Could not open DSO");
@@ -3569,10 +3643,12 @@ fdopen_dso (int fd, const char *name)
   memset (dso, 0, sizeof(DSO));
   dso->elf = elf;
   dso->phnum = phnum;
+  dso->shnum = shnum;
+  dso->shstrndx = shstrndx;
   dso->ehdr = ehdr;
-  dso->scn = (Elf_Scn **) &dso->shdr[ehdr.e_shnum + 20];
+  dso->scn = (Elf_Scn **) &dso->shdr[shnum + 20];
 
-  for (i = 0; i < ehdr.e_shnum; ++i)
+  for (i = 0; i < shnum; ++i)
     {
       dso->scn[i] = elf_getscn (elf, i);
       gelf_getshdr (dso->scn[i], dso->shdr + i);
@@ -3668,7 +3744,7 @@ handle_build_id (DSO *dso, Elf_Data *build_id,
 
     x.d_type = ELF_T_PHDR;
     x.d_size = sizeof u.phdr;
-    for (i = 0; i < dso->ehdr.e_phnum; ++i)
+    for (i = 0; i < dso->phnum; ++i)
       {
 	if (gelf_getphdr (dso->elf, i, &u.phdr) == NULL)
 	  goto bad;
@@ -3680,7 +3756,7 @@ handle_build_id (DSO *dso, Elf_Data *build_id,
 
     x.d_type = ELF_T_SHDR;
     x.d_size = sizeof u.shdr;
-    for (i = 0; i < dso->ehdr.e_shnum; ++i)
+    for (i = 0; i < dso->shnum; ++i)
       if (dso->scn[i] != NULL)
 	{
 	  u.shdr = dso->shdr[i];
@@ -3859,7 +3935,7 @@ main (int argc, char *argv[])
   if (dso == NULL)
     exit (1);
 
-  for (i = 1; i < dso->ehdr.e_shnum; i++)
+  for (i = 1; i < dso->shnum; i++)
     {
       const char *name;
 
@@ -3876,7 +3952,7 @@ main (int argc, char *argv[])
 	  }
 	  /*@fallthrough@*/
 	case SHT_PROGBITS:
-	  name = strptr (dso, dso->ehdr.e_shstrndx, dso->shdr[i].sh_name);
+	  name = strptr (dso, dso->shstrndx, dso->shdr[i].sh_name);
 	  /* TODO: Handle stabs */
 	  if (name != NULL && strcmp (name, ".stab") == 0)
 	    {

@@ -41,7 +41,8 @@ EXTRA_DIST += data/SOURCES/foo.c \
 	      data/SOURCES/bar.c \
 	      data/SOURCES/baz.c \
 	      data/SOURCES/dupe.c \
-	      data/SOURCES/foobar.h
+	      data/SOURCES/foobar.h \
+	      data/SOURCES/large.c
 
 TESTSUITE = $(srcdir)/testsuite
 
