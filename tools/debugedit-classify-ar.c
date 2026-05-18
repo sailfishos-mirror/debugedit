@@ -38,7 +38,7 @@
 static int verbose = 0;
 
 // Negative is infinite, zero is failure, positive is max number to accept.
-static int max_members = -1;
+static long max_members = -1;
 
 /* Returns -1 on error, 0 if member isn't an Elf objects or if it is
    an Elf object but doesn't contain any .[z]debug sections, 1 if it
@@ -109,7 +109,7 @@ classify_ar_member (Elf *member, const char *name, const char *file)
 static int
 classify_ar_elf (int fd, Elf *ar, const char *file)
 {
-  int members = 0;
+  long members = 0;
   bool err = false;
   bool found_debug = false;
   int cmd = ELF_C_READ;
@@ -144,10 +144,20 @@ classify_ar_elf (int fd, Elf *ar, const char *file)
 	  err = true;
 	}
 
+      if (!err)
+	{
+	  members++;
+
+	  if (max_members > 0 && members > max_members)
+	    {
+	      if (verbose > 0)
+		error (0, 0, "too many members (%ld): %s", members, file);
+	      err = true;
+	    }
+	}
+
       if (err)
 	break;
-
-      members++;
     }
 
   if (err)
@@ -157,13 +167,6 @@ classify_ar_elf (int fd, Elf *ar, const char *file)
     {
       if (verbose > 0)
 	error (0, 0, "no member with debug sections: %s", file);
-      return -1;
-    }
-
-  if (max_members > 0 && members > max_members)
-    {
-      if (verbose > 0)
-	error (0, 0, "too many members (%d): %s", members, file);
       return -1;
     }
 
@@ -325,9 +328,16 @@ main (int argc, char **argv)
 	  break;
 
 	case 'm':
-	  max_members = atoi (optarg);
-	  if (max_members == 0)
-	    help (argv[0], true);
+	  {
+	    char *endptr;
+	    long val = strtol (optarg, &endptr, 10);
+	    if (*endptr != '\0' || val <= 0)
+	      {
+		error (0, 0, "invalid max-members: '%s'", optarg);
+		help (argv[0], true);
+	      }
+	    max_members = val;
+	  }
 	  break;
 
 	case 'q':
