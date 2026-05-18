@@ -123,6 +123,7 @@ classify_ar_elf (int fd, Elf *ar, const char *file)
 	    error (0, 0, "couldn't get ar header: %s: '%s'",
 		   elf_errmsg (-1), file);
 	  err = true;
+	  elf_end (elf);
 	  break;
 	}
 
