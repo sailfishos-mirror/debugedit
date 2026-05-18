@@ -160,6 +160,19 @@ classify_ar_elf (int fd, Elf *ar, const char *file)
 	break;
     }
 
+  /* Was there an error getting the next member or were we at the end?  */
+  if (!err && elf == NULL && members != 0 && cmd != ELF_C_NULL)
+    {
+      int elferr = elf_errno ();
+      if (elferr != 0)
+	{
+	  if (verbose >= 0)
+	    error (0, 0, "Couldn't read whole ar file: %s: %s",
+		   elf_errmsg (elferr), file);
+	  err = true;
+	}
+    }
+
   if (err)
     return -1;
 
