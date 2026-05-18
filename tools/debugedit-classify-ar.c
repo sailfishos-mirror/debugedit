@@ -1,5 +1,5 @@
 /* Quick and dirty ELF archive member debug checker.
-   Copyright (C) 2025 Mark J. Wielaard <mark@klomp.org>
+   Copyright (C) 2025, 2026 Mark J. Wielaard <mark@klomp.org>
    This file is part of debugedit.
 
    This file is free software; you can redistribute it and/or modify
@@ -97,7 +97,10 @@ classify_ar_member (Elf *member, const char *name, const char *file)
       /* Just check the name.  */
       if (strncmp (sname, ".debug_", strlen (".debug_")) == 0
 	  || strncmp (sname, ".zdebug_", strlen (".zdebug_")) == 0)
-	found_debug = true;
+	{
+	  found_debug = true;
+	  break;
+	}
     }
 
   return found_debug ? 1 : 0;
