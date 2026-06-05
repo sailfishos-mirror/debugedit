@@ -3638,7 +3638,15 @@ fdopen_dso (int fd, const char *name)
   /* If there are phdrs we want to maintain the layout of the
      allocated sections in the file.  */
   if (phnum != 0)
-    elf_flagelf (elf, ELF_C_SET, ELF_F_LAYOUT);
+    {
+      elf_flagelf (elf, ELF_C_SET, ELF_F_LAYOUT);
+      /* Normally elf_update will do some strict checks on sections,
+	 specifically it will check that sh_size is a multiple of
+	 sh_entsize (if not zero).  This might prevent debugedit from
+	 writing out some sections it just wants to keep unchanged
+	 (even if they aren't strictly valid ELF).  */
+      elf_flagelf (elf, ELF_C_SET, ELF_F_PERMISSIVE);
+    }
 
   memset (dso, 0, sizeof(DSO));
   dso->elf = elf;
