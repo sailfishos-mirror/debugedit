@@ -2803,6 +2803,16 @@ edit_info (DSO *dso, int phase, struct debug_section *sec)
 	  return 1;
 	}
 
+      /* We rely on the .debuginfo section to be valid DWARF, for
+	 example to use embedded string (DW_FORM_string), that means
+	 it should end in a zero DIE ('\0').  */
+      if (*(endcu - 1) != '\0')
+	{
+	  error (0, 0, "%s: %s CU doesn't end with zero DIE",
+		 dso->filename, sec->name);
+	  return 1;
+	}
+
       int cu_version = read_16 (ptr);
       if (cu_version != 2 && cu_version != 3 && cu_version != 4
 	  && cu_version != 5)
