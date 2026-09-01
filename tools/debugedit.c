@@ -1990,8 +1990,8 @@ static bool
 read_dwarf4_line (DSO *dso, unsigned char *ptr, char *comp_dir,
 		  struct line_table *table)
 {
-  unsigned char **dirt;
-  uint32_t value, dirt_cnt;
+  unsigned char **dirt = NULL;
+  uint64_t value, dirt_cnt;
   size_t comp_dir_len = !comp_dir ? 0 : strlen (comp_dir);
   unsigned char *dir = ptr;
 
@@ -2020,7 +2020,15 @@ read_dwarf4_line (DSO *dso, unsigned char *ptr, char *comp_dir,
       ++value;
     }
 
-  dirt = (unsigned char **) alloca (value * sizeof (unsigned char *));
+  if (value > SIZE_MAX / sizeof (unsigned char *))
+    error (1, 0, "%s: Too many dirs in debug_line", dso->filename);
+  dirt = (unsigned char **) malloc (value * sizeof (unsigned char *));
+  if (dirt == NULL)
+    {
+      error (0, errno, "%s: Could not allocate debug_line dirs",
+	     dso->filename);
+      return false;
+    }
   dirt[0] = (unsigned char *) ".";
   dirt_cnt = 1;
   ptr = dir;
@@ -2043,8 +2051,9 @@ read_dwarf4_line (DSO *dso, unsigned char *ptr, char *comp_dir,
 
       if (value >= dirt_cnt)
 	{
-	  error (0, 0, "%s: Wrong directory table index %u",
+	  error (0, 0, "%s: Wrong directory table index %" PRIu64,
 		 dso->filename, value);
+	  free (dirt);
 	  return false;
 	}
       file_len = strlen (file);
@@ -2068,6 +2077,7 @@ read_dwarf4_line (DSO *dso, unsigned char *ptr, char *comp_dir,
       if (s == NULL)
 	{
 	  error (0, ENOMEM, "%s: Reading file table", dso->filename);
+	  free (dirt);
 	  return false;
 	}
       if (*file == '/')
@@ -2126,6 +2136,7 @@ read_dwarf4_line (DSO *dso, unsigned char *ptr, char *comp_dir,
       read_uleb128 (ptr);
     }
 
+  free (dirt);
   return true;
 }
 
@@ -2153,17 +2164,25 @@ read_dwarf5_line_entries (DSO *dso, unsigned char **ptrp,
 
   /* directories_count */
   /* file_names_count */
-  unsigned entry_count = read_uleb128 (*ptrp);
+  size_t entry_count = read_uleb128 (*ptrp);
 
   bool collecting_dirs = phase == 0 && *dirs == NULL;
   bool writing_files = phase == 0 && *dirs != NULL;
   if (collecting_dirs)
     {
       *ndir = entry_count;
-      *dirs = malloc (entry_count * sizeof (char *));
-      if (*dirs == NULL)
-	error (1, errno, "%s: Could not allocate debug_line dirs",
-	       dso->filename);
+      if (entry_count > 0)
+	{
+	  if (entry_count > SIZE_MAX / sizeof (char *))
+	    error (1, 0, "%s: Too many dirs/names in debug_line",
+		   dso->filename);
+	  *dirs = malloc (entry_count * sizeof (char *));
+	  if (*dirs == NULL)
+	    error (1, errno, "%s: Could not allocate debug_line dirs",
+		   dso->filename);
+	}
+      else
+	*dirs = NULL;
     }
 
   /* directories */
