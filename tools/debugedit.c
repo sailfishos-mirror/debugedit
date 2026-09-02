@@ -2225,6 +2225,13 @@ read_dwarf5_line_entries (DSO *dso, unsigned char **ptrp,
 			{
 			  debug_section *sec = &debug_sections[line_strp
                                            ? DEBUG_LINE_STR : DEBUG_STR];
+			  if (sec->data == NULL || idx >= sec->size)
+			    {
+			      error (0, 0, "%s: Bad %s idx %zd in .debug_line",
+				     dso->filename, sec->name, idx);
+			      return false;
+			    }
+
 			  if (collecting_dirs)
 			    dir = (char *)sec->data + idx;
 			  if (writing_files)
@@ -3123,6 +3130,15 @@ edit_dwarf2 (DSO *dso)
 		  debug_sec->elf_data = data;
 		  debug_sec->size = data->d_size;
 		  debug_sec->sec = i;
+
+		  /* String sections should end with a zero terminator.  */
+		  if ((j == DEBUG_STR || j == DEBUG_LINE_STR)
+		      && debug_sec->size > 0)
+		    {
+		      if (debug_sec->data[debug_sec->size - 1] != '\0')
+			error (0, 0, "%s: %s isn't zero terminated",
+			       dso->filename, debug_sec->name);
+		    }
 		  break;
 		}
 
