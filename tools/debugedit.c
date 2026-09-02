@@ -3138,8 +3138,14 @@ edit_dwarf2 (DSO *dso)
 		  debug_sec->size = data->d_size;
 		  debug_sec->sec = i;
 
-		  /* String sections should end with a zero terminator.  */
-		  if ((j == DEBUG_STR || j == DEBUG_LINE_STR)
+		  /* String sections and abbrev tables should end with
+		     a zero terminator.  This makes sure strings read
+		     from these sections are always terminated and
+		     that reading an leb128 value terminates before
+		     the section ends. */
+		  if ((j == DEBUG_STR
+		       || j == DEBUG_LINE_STR
+		       || j == DEBUG_ABBREV)
 		      && debug_sec->size > 0)
 		    {
 		      if (debug_sec->data[debug_sec->size - 1] != '\0')
