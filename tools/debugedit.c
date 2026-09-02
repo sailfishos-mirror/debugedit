@@ -939,6 +939,13 @@ do_read_str_form_relocated (DSO *dso, uint32_t form, unsigned char *ptr,
       return -1;
     }
 
+  size_t str_offsets_size = debug_sections[DEBUG_STR_OFFSETS].size;
+  if (debug_sections[DEBUG_STR_OFFSETS].data == NULL
+    || str_offsets_size < 4
+    || str_offsets_size - 4 < cu->str_offsets_base
+    || (str_offsets_size - 4 - cu->str_offsets_base) / 4 < idx)
+    error (1, 0, "%s: Bad string offsets pointer index %u",
+	   dso->filename, idx);
   unsigned char *str_off_ptr = debug_sections[DEBUG_STR_OFFSETS].data;
   str_off_ptr += cu->str_offsets_base;
   str_off_ptr += idx * 4;
