@@ -220,6 +220,10 @@ struct CU
   uint32_t str_offsets_base;
   /* The offset into the .debug_macros section for this CU (DW_AT_macros).  */
   uint32_t macros_offs;
+  /* End of data in this CU.  */
+  unsigned char *end;
+  /* Whether this CU (or the section as a whole) has a zero terminator.  */
+  bool zero_terminated;
 
   struct CU *next;
 };
@@ -267,6 +271,7 @@ typedef struct debug_section
     REL *relbuf;
     REL *relend;
     bool rel_updated;
+    bool zero_terminated;
     uint32_t ch_type;
     /* Only happens for COMDAT .debug_macro and .debug_types.  */
     struct debug_section *next;
@@ -1959,7 +1964,16 @@ skip_form (DSO *dso, uint32_t *formp, unsigned char **ptrp, struct CU *cu)
       *ptrp += 4;
       break;
     case DW_FORM_string:
-      *ptrp = (unsigned char *) strchr ((char *)*ptrp, '\0') + 1;
+      if (cu->zero_terminated)
+	*ptrp = (unsigned char *) strchr ((char *)*ptrp, '\0') + 1;
+      else
+	{
+	  unsigned char *zerop = (*ptrp >= cu->end ? NULL
+				  : memchr (*ptrp, '\0', cu->end - *ptrp));
+	  if (zerop == NULL)
+	    return FORM_ERROR;
+	  *ptrp = zerop + 1;
+	}
       break;
     case DW_FORM_indirect:
       *formp = read_uleb128 (*ptrp);
@@ -2570,7 +2584,14 @@ edit_attributes (DSO *dso, unsigned char *ptr, struct abbrev_tag *t, int phase,
 	      if (form == DW_FORM_string)
 		{
 		  free (comp_dir);
-		  comp_dir = strdup ((char *)ptr);
+		  if (cu->zero_terminated
+		      || (ptr < cu->end
+			  && memchr (ptr, '\0', cu->end - ptr) != NULL))
+		    comp_dir = strdup ((char *)ptr);
+		  else
+		    error (1, 0,
+			   "%s: comp_dir DW_FORM_string not zero terminated",
+			   dso->filename);
 
 		  if (dest_dir)
 		    {
@@ -2836,15 +2857,14 @@ edit_info (DSO *dso, int phase, struct debug_section *sec)
 	  return 1;
 	}
 
-      /* We rely on the .debuginfo section to be valid DWARF, for
-	 example to use embedded string (DW_FORM_string), that means
-	 it should end in a zero DIE ('\0').  */
-      if (*(endcu - 1) != '\0')
-	{
-	  error (0, 0, "%s: %s CU doesn't end with zero DIE",
-		 dso->filename, sec->name);
-	  return 1;
-	}
+      cu->end = endcu;
+
+      /* For embedded strings (DW_FORM_string) we like to make sure it
+	 always terminates (inside the section) in most cases there is
+	 a zero terminator at the end of the section or CU.  If not
+	 we'll need to explicitly check for an embedded string zero
+	 terminator.  */
+      cu->zero_terminated = sec->zero_terminated || (*(endcu - 1) == '\0');
 
       int cu_version = read_16 (ptr);
       if (cu_version != 2 && cu_version != 3 && cu_version != 4
@@ -3066,6 +3086,7 @@ edit_dwarf2 (DSO *dso)
       debug_sections[i].size = 0;
       debug_sections[i].sec = 0;
       debug_sections[i].relsec = 0;
+      debug_sections[i].zero_terminated = false;
     }
 
   for (i = 1; i < dso->shnum; ++i)
@@ -3151,7 +3172,18 @@ edit_dwarf2 (DSO *dso)
 		      if (debug_sec->data[debug_sec->size - 1] != '\0')
 			error (0, 0, "%s: %s isn't zero terminated",
 			       dso->filename, debug_sec->name);
+		      debug_sec->zero_terminated = true;
 		    }
+
+		  /* The .debug_info section doesn't technically have
+		     to end in a zero terminator, but often is. If it
+		     is then don't need extra checks to make sure
+		     embedded strings (DW_FORM_string) are correctly
+		     terminated.  */
+		  if ((j == DEBUG_INFO || j == DEBUG_TYPES)
+		      && debug_sec->size > 0
+		      && debug_sec->data[debug_sec->size - 1] == '\0')
+		    debug_sec->zero_terminated = true;
 		  break;
 		}
 
