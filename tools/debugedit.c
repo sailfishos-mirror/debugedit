@@ -3254,7 +3254,7 @@ edit_dwarf2 (DSO *dso)
     }
   else
     {
-      error (0, 0, "%s: Wrong ELF data enconding", dso->filename);
+      error (0, 0, "%s: Wrong ELF data encoding", dso->filename);
       return 1;
     }
 
