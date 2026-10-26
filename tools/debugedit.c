@@ -234,7 +234,7 @@ typedef struct
   GElf_Ehdr ehdr;
   Elf_Scn **scn;
   const char *filename;
-  int lastscn;
+  uint64_t end_offset;
   size_t phnum;
   size_t shnum;
   size_t shstrndx;
@@ -3666,6 +3666,7 @@ fdopen_dso (int fd, const char *name)
   int i;
   DSO *dso = NULL;
   size_t phnum, shnum, shstrndx;
+  uint64_t end_offset = 0;
 
   if (dest_dir == NULL && (!do_build_id || no_recompute_build_id))
     elf = elf_begin (fd, ELF_C_READ, NULL);
@@ -3750,7 +3751,10 @@ fdopen_dso (int fd, const char *name)
     {
       dso->scn[i] = elf_getscn (elf, i);
       gelf_getshdr (dso->scn[i], dso->shdr + i);
+      if (dso->shdr[i].sh_offset + dso->shdr[i].sh_size > end_offset)
+       end_offset = dso->shdr[i].sh_offset + dso->shdr[i].sh_size;
     }
+  dso->end_offset = end_offset;
 
   dso->filename = (const char *) strdup (name);
   setup_strings (&dso->debug_str);
@@ -4137,6 +4141,13 @@ main (int argc, char *argv[])
 		 || need_string_replacement
 		 || (do_build_id && build_id != NULL));
 #endif
+
+  /* If the shdrs are not at the end and there are phdrs then we do
+     need to update the offsets so that the shdrs come last.
+     https://sourceware.org/bugzilla/show_bug.cgi?id=34468 */
+  need_update = (need_update
+                || (dso->phnum != 0
+                    && (dso->ehdr.e_shoff < dso->end_offset)));
 
   /* We might have changed the size of some debug sections. If so make
      sure the section headers are updated and the data offsets are
